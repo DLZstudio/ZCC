@@ -198,8 +198,9 @@ DeclPtr Parser::parseFunctionDeclaration() {
 
     // 允许 main 作为函数名
     Token nameToken;
-    if (match(TokenType::MAIN)) {
-        // 创建一个模拟的 IDENTIFIER token
+    if (check(TokenType::MAIN)) {
+        // 消耗 MAIN token 并创建 IDENTIFIER
+        advance();
         Token prev = previous();
         nameToken = Token(TokenType::IDENTIFIER, std::monostate{}, "main", prev.line, prev.column, prev.length);
     } else {
