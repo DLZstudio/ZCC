@@ -1,0 +1,42 @@
+# 构建输出
+build/
+dist/
+out/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.zcb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.vcxproj*
+*.sln
+*.user
+*.suo
+
+# 测试
+Testing/
+TestResults/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.bak
+*.orig
+
+# 文档生成
+docs/generated/
