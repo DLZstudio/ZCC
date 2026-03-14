@@ -1,7 +1,6 @@
 #include "Parser.hpp"
 #include <stdexcept>
 #include <sstream>
-#include <iostream>
 
 namespace zcc {
 
@@ -124,11 +123,6 @@ SourceLocation Parser::getCurrentLocation() const {
 
 DeclPtr Parser::parseDeclaration() {
     try {
-        // 调试输出
-        Token currentToken = peek();
-        std::cerr << "[DEBUG] parseDeclaration: token type=" << static_cast<int>(currentToken.type) 
-                  << " lexeme=" << currentToken.lexeme << std::endl;
-        
         // 模块声明
         if (match(TokenType::MODULE)) {
             return parseModuleDeclaration();
@@ -151,7 +145,6 @@ DeclPtr Parser::parseDeclaration() {
 
         // 函数声明
         if (match(TokenType::FUNCTION) || match(TokenType::ASYNC)) {
-            std::cerr << "[DEBUG] Found FUNCTION or ASYNC keyword" << std::endl;
             return parseFunctionDeclaration();
         }
 
