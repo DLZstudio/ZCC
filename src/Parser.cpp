@@ -1182,12 +1182,13 @@ ExprPtr Parser::parseObjectLiteral() {
             TokenType type = previous().type;
             Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
             prop.key = nameToken.lexeme;
-            
+
             expect(TokenType::LEFT_PAREN, "Expected '(' after getter/setter name");
             expect(TokenType::RIGHT_PAREN, "Expected ')' after getter/setter parameters");
-            
+
             auto body = parseBlock();
             
+            std::vector<std::string> params;
             prop.value = std::make_shared<FunctionExpr>("", params, body->statements, false,
                                                         SourceLocation(filename_, 0, 0, 0));
             prop.isMethod = true;
