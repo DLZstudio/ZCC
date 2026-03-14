@@ -157,6 +157,34 @@ DeclPtr Parser::parseDeclaration() {
             return parseVariableDeclaration(true);
         }
 
+        // 主函数 (特殊处理)
+        if (match(TokenType::MAIN)) {
+            if (check(TokenType::LEFT_PAREN)) {
+                Token nameToken = previous();
+                std::vector<std::string> params;
+
+                expect(TokenType::LEFT_PAREN, "Expected '(' after 'main'");
+
+                if (!check(TokenType::RIGHT_PAREN)) {
+                    do {
+                        if (check(TokenType::IDENTIFIER)) {
+                            params.push_back(advance().lexeme);
+                        } else {
+                            error(peek(), "Expected parameter name");
+                            break;
+                        }
+                    } while (match(TokenType::COMMA));
+                }
+
+                expect(TokenType::RIGHT_PAREN, "Expected ')' after parameters");
+                
+                auto body = parseBlock();
+
+                return std::make_shared<FunctionDecl>(
+                    nameToken.lexeme, params, body, false, false, getLocation(nameToken));
+            }
+        }
+
         // 语句作为顶层声明
         auto stmt = parseStatement();
         if (stmt) {
@@ -195,18 +223,9 @@ DeclPtr Parser::parseFunctionDeclaration() {
     if (isAsync && !match(TokenType::FUNCTION)) {
         error(peek(), "Expected 'function' after 'async'");
     }
-
-    // 允许 main 作为函数名
-    Token nameToken;
-    if (check(TokenType::MAIN)) {
-        // 消耗 MAIN token 并创建 IDENTIFIER
-        advance();
-        Token prev = previous();
-        nameToken = Token(TokenType::IDENTIFIER, std::monostate{}, "main", prev.line, prev.column, prev.length);
-    } else {
-        nameToken = expect(TokenType::IDENTIFIER, "Expected function name");
-    }
-
+    
+    Token nameToken = expect(TokenType::IDENTIFIER, "Expected function name");
+    
     expect(TokenType::LEFT_PAREN, "Expected '(' after function name");
     
     std::vector<std::string> params;
@@ -1163,7 +1182,7 @@ ExprPtr Parser::parseObjectLiteral() {
             TokenType type = previous().type;
             Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
             prop.key = nameToken.lexeme;
-
+            
             expect(TokenType::LEFT_PAREN, "Expected '(' after getter/setter name");
             expect(TokenType::RIGHT_PAREN, "Expected ')' after getter/setter parameters");
 
