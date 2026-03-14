@@ -451,10 +451,10 @@ struct WhileStmt : Statement {
 struct ForEachStmt : Statement {
     std::string variable;
     ExprPtr iterable;
-    StmtPtr body;
+    BlockStmt* body;
     
-    ForEachStmt(std::string var, ExprPtr iter, StmtPtr b, const SourceLocation& loc)
-        : variable(std::move(var)), iterable(std::move(iter)), body(std::move(b)) {
+    ForEachStmt(std::string var, ExprPtr iter, BlockStmt* b, const SourceLocation& loc)
+        : variable(std::move(var)), iterable(std::move(iter)), body(b) {
         location = loc;
     }
     
