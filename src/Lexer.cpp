@@ -7,7 +7,16 @@ namespace zcc {
 
 Lexer::Lexer(std::string source, std::string filename)
     : source_(std::move(source)), filename_(std::move(filename)),
-      start_(0), current_(0), line_(1), column_(1) {}
+      start_(0), current_(0), line_(1), column_(1) {
+    // 跳过 UTF-8 BOM (如果存在)
+    if (source_.size() >= 3 && 
+        static_cast<unsigned char>(source_[0]) == 0xEF &&
+        static_cast<unsigned char>(source_[1]) == 0xBB &&
+        static_cast<unsigned char>(source_[2]) == 0xBF) {
+        current_ = 3;
+        start_ = 3;
+    }
+}
 
 std::vector<Token> Lexer::tokenize() {
     std::vector<Token> tokens;
