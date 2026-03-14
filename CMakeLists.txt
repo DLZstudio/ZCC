@@ -43,12 +43,16 @@ set(ZCC_MIDEND_SOURCES
     src/midend/ZCCIRGenerator.cpp
     src/midend/ZCCIROptimizer.cpp
     src/midend/TypeSpecializer.cpp
+    src/midend/IRGenerator.cpp
 )
 
 set(ZCC_BACKEND_SOURCES
     src/backend/BackendManager.cpp
     src/backend/CBackend.cpp
     src/backend/WASMBackend.cpp
+    src/backend/MCBackend.cpp
+    src/backend/BIOSBackend.cpp
+    src/backend/MicroPythonBackend.cpp
 )
 
 if(ZCC_ENABLE_LLVM)
