@@ -219,13 +219,21 @@ DeclPtr Parser::parseVariableDeclaration(bool isConst) {
 
 DeclPtr Parser::parseFunctionDeclaration() {
     bool isAsync = previous().type == TokenType::ASYNC;
-    
+
     if (isAsync && !match(TokenType::FUNCTION)) {
         error(peek(), "Expected 'function' after 'async'");
     }
-    
-    Token nameToken = expect(TokenType::IDENTIFIER, "Expected function name");
-    
+
+    // 允许 main 作为函数名
+    Token nameToken;
+    if (check(TokenType::MAIN)) {
+        advance();
+        Token prev = previous();
+        nameToken = Token(TokenType::IDENTIFIER, std::monostate{}, "main", prev.line, prev.column, prev.length);
+    } else {
+        nameToken = expect(TokenType::IDENTIFIER, "Expected function name");
+    }
+
     expect(TokenType::LEFT_PAREN, "Expected '(' after function name");
     
     std::vector<std::string> params;
