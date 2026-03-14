@@ -315,7 +315,8 @@ DeclPtr Parser::parseClassDeclaration() {
                 expect(TokenType::RIGHT_PAREN, "Expected ')' after getter/setter parameters");
                 auto body = parseBlock();
                 
-                members.push_back(std::make_shared<FunctionDecl>(methodToken.lexeme, {}, body, false, false,
+                std::vector<std::string> params;
+                members.push_back(std::make_shared<FunctionDecl>(methodToken.lexeme, params, body, false, false,
                                               getLocation(methodToken)));
             } else {
                 expect(TokenType::LEFT_PAREN, "Expected '(' after method name");
@@ -1187,7 +1188,7 @@ ExprPtr Parser::parseObjectLiteral() {
             
             auto body = parseBlock();
             
-            prop.value = std::make_shared<FunctionExpr>("", {}, body->statements, false,
+            prop.value = std::make_shared<FunctionExpr>("", params, body->statements, false,
                                                         SourceLocation(filename_, 0, 0, 0));
             prop.isMethod = true;
         } else {

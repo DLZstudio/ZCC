@@ -514,9 +514,9 @@ void CodeGenerator::generateForEachStmt(ForEachStmt* stmt) {
     declareVariable(stmt->variable);
     int slot = resolveLocal(stmt->variable);
     emitBytes(static_cast<uint8_t>(OpCode::STORE_LOCAL), static_cast<uint8_t>(slot));
-    
+
     // 循环体
-    generateStatement(stmt->body);
+    generateBlock(stmt->body);
     
     // 索引++
     emitBytes(static_cast<uint8_t>(OpCode::LOAD_LOCAL), 0);
