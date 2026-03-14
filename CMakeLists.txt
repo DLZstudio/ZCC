@@ -49,10 +49,8 @@ set(ZCC_MIDEND_SOURCES
 set(ZCC_BACKEND_SOURCES
     src/backend/BackendManager.cpp
     src/backend/CBackend.cpp
-    src/backend/WASMBackend.cpp
-    src/backend/MCBackend.cpp
+    src/backend/NativeBackend.cpp
     src/backend/BIOSBackend.cpp
-    src/backend/MicroPythonBackend.cpp
 )
 
 if(ZCC_ENABLE_LLVM)
