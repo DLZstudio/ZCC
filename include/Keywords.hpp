@@ -265,8 +265,11 @@ public:
     }
 };
 
-// 全局关键词映射实例
-inline KeywordMap gKeywordMap;
+// 全局关键词映射实例 - 使用函数返回静态局部变量确保初始化顺序
+inline KeywordMap& getKeywordMap() {
+    static KeywordMap instance;
+    return instance;
+}
 
 } // namespace zcc
 

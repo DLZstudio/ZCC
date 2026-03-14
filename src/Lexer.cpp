@@ -192,9 +192,9 @@ std::optional<Token> Lexer::scanIdentifier() {
     }
     
     std::string text = source_.substr(start_, current_ - start_);
-    
+
     // 检查是否为关键词
-    KeywordMap::KeywordType keywordType = gKeywordMap.lookup(text);
+    KeywordMap::KeywordType keywordType = getKeywordMap().lookup(text);
     if (keywordType != KeywordMap::KeywordType::NOT_KEYWORD) {
         TokenType tokenType = TokenType::IDENTIFIER;
         TokenValue value = std::monostate{};
