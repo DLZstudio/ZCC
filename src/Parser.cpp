@@ -119,7 +119,7 @@ SourceLocation Parser::getCurrentLocation() const {
     return getLocation(peek());
 }
 
-// ==================== 解枝声明 ====================
+// ==================== 解析声明 ====================
 
 DeclPtr Parser::parseDeclaration() {
     try {
@@ -127,47 +127,44 @@ DeclPtr Parser::parseDeclaration() {
         if (match(TokenType::MODULE)) {
             return parseModuleDeclaration();
         }
-        
+
         // 导入声明
         if (match(TokenType::IMPORT)) {
             return parseImportDeclaration();
         }
-        
-        // ????
+
+        // 导出声明
         if (match(TokenType::EXPORT)) {
             return parseExportDeclaration();
         }
 
-        // ???
+        // 类声明
         if (match(TokenType::CLASS)) {
             return parseClassDeclaration();
         }
 
-        // ????
+        // 函数声明
         if (match(TokenType::FUNCTION) || match(TokenType::ASYNC)) {
             return parseFunctionDeclaration();
         }
-        
-        // 坘針声明
+
+        // 变量声明
         if (match(TokenType::AUTO)) {
             return parseVariableDeclaration(false);
         }
-        
+
         if (match(TokenType::CONST)) {
             return parseVariableDeclaration(true);
         }
-        
-        // 主函�?(特殊处睆)
+
+        // 主函数 (特殊处理)
         if (match(TokenType::MAIN)) {
-            // 主函数坎面应该跟 (
             if (check(TokenType::LEFT_PAREN)) {
-                // 这是一个主函数声明
                 Token nameToken = previous();
                 std::vector<std::string> params;
-                
+
                 expect(TokenType::LEFT_PAREN, "Expected '(' after 'main'");
-                
-                // 解枝坂数
+
                 if (!check(TokenType::RIGHT_PAREN)) {
                     do {
                         if (check(TokenType::IDENTIFIER)) {
@@ -178,29 +175,28 @@ DeclPtr Parser::parseDeclaration() {
                         }
                     } while (match(TokenType::COMMA));
                 }
-                
+
                 expect(TokenType::RIGHT_PAREN, "Expected ')' after parameters");
                 
                 auto body = parseBlock();
-                
+
                 return std::make_shared<FunctionDecl>(
                     nameToken.lexeme, params, body, false, false, getLocation(nameToken));
             }
         }
-        
-        // 语坥作为顶层声明
+
+        // 语句作为顶层声明
         auto stmt = parseStatement();
         if (stmt) {
-            // 包装戝表达弝语坥声明
             auto exprStmt = std::dynamic_pointer_cast<ExpressionStmt>(stmt);
             if (exprStmt) {
-                // 创建一个虚拟坘針声明来包装表达�?                auto loc = getLocation(previous());
+                auto loc = getLocation(previous());
                 return std::make_shared<VariableDecl>("__top_level", exprStmt->expression, false, loc);
             }
         }
-        
+
         return nullptr;
-        
+
     } catch (...) {
         synchronize();
         return nullptr;
@@ -224,7 +220,6 @@ DeclPtr Parser::parseVariableDeclaration(bool isConst) {
 DeclPtr Parser::parseFunctionDeclaration() {
     bool isAsync = previous().type == TokenType::ASYNC;
     
-    // 如果已绝匹酝�?ASYNC，需覝冝匹酝 FUNCTION
     if (isAsync && !match(TokenType::FUNCTION)) {
         error(peek(), "Expected 'function' after 'async'");
     }
@@ -239,7 +234,6 @@ DeclPtr Parser::parseFunctionDeclaration() {
             if (check(TokenType::IDENTIFIER)) {
                 params.push_back(advance().lexeme);
             } else if (match(TokenType::DOT_DOT_DOT)) {
-                // 剩余坂数
                 if (check(TokenType::IDENTIFIER)) {
                     params.push_back("..." + advance().lexeme);
                 }
@@ -269,12 +263,12 @@ DeclPtr Parser::parseClassDeclaration() {
     }
     
     expect(TokenType::LEFT_BRACE, "Expected '{' before class body");
-
+    
     std::vector<DeclPtr> members;
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
-        // 解枝类戝�?        if (match(TokenType::CONSTRUCTOR)) {
-            // 构造函�?            expect(TokenType::LEFT_PAREN, "Expected '(' after 'constructor'");
-
+        if (match(TokenType::CONSTRUCTOR)) {
+            expect(TokenType::LEFT_PAREN, "Expected '(' after 'constructor'");
+            
             std::vector<std::string> params;
             if (!check(TokenType::RIGHT_PAREN)) {
                 do {
@@ -283,15 +277,15 @@ DeclPtr Parser::parseClassDeclaration() {
                     }
                 } while (match(TokenType::COMMA));
             }
-
+            
             expect(TokenType::RIGHT_PAREN, "Expected ')' after constructor parameters");
-
+            
             auto body = parseBlock();
-
-            members.push_back(std::make_shared<FunctionDecl>(name, params, body, false, false,
+            
+            members.push_back(std::make_shared<FunctionDecl>(name, params, body, false, false, 
                                           SourceLocation(filename_, 0, 0, 0)));
         } else if (match(TokenType::STATIC_)) {
-            // 静思方�?            if (match(TokenType::FUNCTION)) {
+            if (match(TokenType::FUNCTION)) {
                 Token methodToken = expect(TokenType::IDENTIFIER, "Expected method name");
                 
                 expect(TokenType::LEFT_PAREN, "Expected '(' after method name");
@@ -317,14 +311,14 @@ DeclPtr Parser::parseClassDeclaration() {
             Token methodToken = expect(TokenType::IDENTIFIER, "Expected method name");
             
             if (type == TokenType::GET || type == TokenType::SET) {
-                // Getter/Setter - 简化处�?                expect(TokenType::LEFT_PAREN, "Expected '(' after getter/setter name");
+                expect(TokenType::LEFT_PAREN, "Expected '(' after getter/setter name");
                 expect(TokenType::RIGHT_PAREN, "Expected ')' after getter/setter parameters");
                 auto body = parseBlock();
                 
                 members.push_back(std::make_shared<FunctionDecl>(methodToken.lexeme, {}, body, false, false,
                                               getLocation(methodToken)));
             } else {
-                // 普通方�?                expect(TokenType::LEFT_PAREN, "Expected '(' after method name");
+                expect(TokenType::LEFT_PAREN, "Expected '(' after method name");
                 
                 std::vector<std::string> params;
                 if (!check(TokenType::RIGHT_PAREN)) {
@@ -343,16 +337,15 @@ DeclPtr Parser::parseClassDeclaration() {
                                               getLocation(methodToken)));
             }
         } else if (check(TokenType::IDENTIFIER)) {
-            // 字段声明
             Token fieldToken = advance();
             
             if (match(TokenType::EQUAL)) {
-                // 有初始�?                parseExpression();
+                parseExpression();
                 expect(TokenType::SEMICOLON, "Expected ';' after field declaration");
             } else if (match(TokenType::SEMICOLON)) {
-                // 无初始�?            } else {
-                // 坯能是方�?                if (match(TokenType::LEFT_PAREN)) {
-                    // 方法
+                // 无初始值
+            } else {
+                if (match(TokenType::LEFT_PAREN)) {
                     std::vector<std::string> params;
                     if (!check(TokenType::RIGHT_PAREN)) {
                         do {
@@ -396,18 +389,16 @@ DeclPtr Parser::parseImportDeclaration() {
     std::vector<ImportDecl::ImportSpecifier> specifiers;
     std::string namespaceAlias;
     
-    // 检查是坦有默认导入
     if (check(TokenType::IDENTIFIER)) {
         defaultImport = advance().lexeme;
         
         if (match(TokenType::COMMA)) {
-            // 还有命坝导入
+            // 还有命名导入
         } else if (match(TokenType::FROM)) {
-            // 坪有默认导入
+            // 只有默认导入
         }
     }
     
-    // 命坝导入
     if (match(TokenType::LEFT_BRACE)) {
         while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
             std::string importedName;
@@ -431,7 +422,6 @@ DeclPtr Parser::parseImportDeclaration() {
         expect(TokenType::RIGHT_BRACE, "Expected '}' after import specifiers");
     }
     
-    // 命坝空间导入
     if (match(TokenType::STAR)) {
         expect(TokenType::AS, "Expected 'as' after '*' in import");
         Token aliasToken = expect(TokenType::IDENTIFIER, "Expected alias name");
@@ -468,7 +458,7 @@ DeclPtr Parser::parseExportDeclaration() {
             name = classDecl->name;
         }
     } else if (match(TokenType::LEFT_BRACE)) {
-        // 导出列表 - 简化处�?        while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
+        while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
             if (check(TokenType::IDENTIFIER)) {
                 name = advance().lexeme;
             }
@@ -480,7 +470,7 @@ DeclPtr Parser::parseExportDeclaration() {
             expect(TokenType::STRING, "Expected module path");
         }
     } else if (isDefault) {
-        // 默认导出表达�?        auto expr = parseExpression();
+        auto expr = parseExpression();
         name = "default";
     }
     
@@ -490,20 +480,18 @@ DeclPtr Parser::parseExportDeclaration() {
                                         SourceLocation(filename_, 0, 0, 0));
 }
 
-// ==================== 解枝语坥 ====================
+// ==================== 解析语句 ====================
 
 StmtPtr Parser::parseStatement() {
-    // 块语�?    if (check(TokenType::LEFT_BRACE)) {
+    if (check(TokenType::LEFT_BRACE)) {
         BlockStmt* block = parseBlock();
         return std::static_pointer_cast<Statement>(std::make_shared<BlockStmt>(*block));
     }
 
-    // if 语坥
     if (match(TokenType::IF)) {
         return parseIfStatement();
     }
 
-    // for 循环
     if (match(TokenType::FOR)) {
         if (match(TokenType::EACH)) {
             return parseForEachStatement();
@@ -511,45 +499,36 @@ StmtPtr Parser::parseStatement() {
         return parseForStatement();
     }
 
-    // while 循环
     if (match(TokenType::WHILE)) {
         return parseWhileStatement();
     }
 
-    // return 语坥
     if (match(TokenType::RETURN)) {
         return parseReturnStatement();
     }
-    
-    // break 语坥
+
     if (match(TokenType::BREAK)) {
         return parseBreakStatement();
     }
-    
-    // continue 语坥
+
     if (match(TokenType::CONTINUE)) {
         return parseContinueStatement();
     }
-    
-    // throw 语坥
+
     if (match(TokenType::THROW)) {
         return parseThrowStatement();
     }
-    
-    // try 语坥
+
     if (match(TokenType::TRY)) {
         return parseTryStatement();
     }
-    
-    // switch 语坥
+
     if (match(TokenType::SWITCH)) {
         return parseSwitchStatement();
     }
-    
-    // 表达弝语坥或声明
+
     if (match(TokenType::AUTO) || match(TokenType::CONST)) {
-        // 这应该已绝在 parseDeclaration 中处睆了
-        // 这里坯能是语坥块中的局部声�?        bool isConst = previous().type == TokenType::CONST;
+        bool isConst = previous().type == TokenType::CONST;
         Token nameToken = expect(TokenType::IDENTIFIER, "Expected variable name");
         
         ExprPtr initializer;
@@ -562,7 +541,7 @@ StmtPtr Parser::parseStatement() {
         return std::make_shared<VariableDecl>(nameToken.lexeme, initializer, isConst, 
                                               getLocation(nameToken));
     }
-    
+
     return parseExpressionStatement();
 }
 
@@ -619,7 +598,7 @@ StmtPtr Parser::parseForStatement() {
         initializer = std::make_shared<VariableDecl>(nameToken.lexeme, initExpr, isConst,
                                                      getLocation(nameToken));
     } else if (!check(TokenType::SEMICOLON)) {
-        // 将表达弝包装戝语�?        initializer = std::make_shared<ExpressionStmt>(parseExpression(), SourceLocation(filename_, 0, 0, 0));
+        initializer = std::make_shared<ExpressionStmt>(parseExpression(), SourceLocation(filename_, 0, 0, 0));
     }
 
     expect(TokenType::SEMICOLON, "Expected ';' after initializer");
@@ -647,15 +626,15 @@ StmtPtr Parser::parseForStatement() {
 StmtPtr Parser::parseForEachStatement() {
     Token varToken = expect(TokenType::IDENTIFIER, "Expected variable name in for-each");
     std::string variable = varToken.lexeme;
-    
+
     expect(TokenType::IN, "Expected 'in' after for-each variable");
-    
+
     auto iterable = parseExpression();
-    
+
     expect(TokenType::LEFT_BRACE, "Expected '{' before for-each body");
     auto body = parseBlock();
     expect(TokenType::RIGHT_BRACE, "Expected '}' after for-each body");
-    
+
     return std::make_shared<ForEachStmt>(variable, iterable, body, getLocation(varToken));
 }
 
@@ -766,7 +745,7 @@ StmtPtr Parser::parseSwitchStatement() {
     return std::make_shared<SwitchStmt>(discriminant, cases, getLocation(token));
 }
 
-// ==================== 解枝表达�?====================
+// ==================== 解析表达式 ====================
 
 ExprPtr Parser::parseExpression() {
     return parseAssignment();
@@ -807,7 +786,7 @@ ExprPtr Parser::parseLogicalOr() {
     while (match(TokenType::PIPE_PIPE)) {
         Token op = previous();
         auto right = parseLogicalAnd();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -819,7 +798,7 @@ ExprPtr Parser::parseLogicalAnd() {
     while (match(TokenType::AMPERSAND_AMPERSAND)) {
         Token op = previous();
         auto right = parseBitwiseOr();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -831,7 +810,7 @@ ExprPtr Parser::parseBitwiseOr() {
     while (match(TokenType::PIPE)) {
         Token op = previous();
         auto right = parseBitwiseXor();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -843,7 +822,7 @@ ExprPtr Parser::parseBitwiseXor() {
     while (match(TokenType::CARET)) {
         Token op = previous();
         auto right = parseBitwiseAnd();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -855,7 +834,7 @@ ExprPtr Parser::parseBitwiseAnd() {
     while (match(TokenType::AMPERSAND)) {
         Token op = previous();
         auto right = parseEquality();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -868,7 +847,7 @@ ExprPtr Parser::parseEquality() {
                   TokenType::EQUAL_EQUAL_EQUAL, TokenType::BANG_EQUAL_EQUAL})) {
         Token op = previous();
         auto right = parseComparison();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -881,7 +860,7 @@ ExprPtr Parser::parseComparison() {
                   TokenType::LESS_EQUAL, TokenType::GREATER_EQUAL})) {
         Token op = previous();
         auto right = parseShift();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -893,7 +872,7 @@ ExprPtr Parser::parseShift() {
     while (match({TokenType::LESS_LESS, TokenType::GREATER_GREATER})) {
         Token op = previous();
         auto right = parseAdditive();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -905,7 +884,7 @@ ExprPtr Parser::parseAdditive() {
     while (match({TokenType::PLUS, TokenType::MINUS})) {
         Token op = previous();
         auto right = parseMultiplicative();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -917,7 +896,7 @@ ExprPtr Parser::parseMultiplicative() {
     while (match({TokenType::STAR, TokenType::SLASH, TokenType::PERCENT})) {
         Token op = previous();
         auto right = parseExponentiation();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -929,7 +908,7 @@ ExprPtr Parser::parseExponentiation() {
     if (match(TokenType::STAR_STAR)) {
         Token op = previous();
         auto right = parseUnary();
-        expr = std::make_shared<BinaryExpr>(expr, op.type, right, op.location);
+        expr = std::make_shared<BinaryExpr>(expr, op.type, right, getLocation(op));
     }
     
     return expr;
@@ -940,7 +919,7 @@ ExprPtr Parser::parseUnary() {
                TokenType::PLUS_PLUS, TokenType::MINUS_MINUS})) {
         Token op = previous();
         auto operand = parseUnary();
-        return std::make_shared<UnaryExpr>(op.type, operand, op.location);
+        return std::make_shared<UnaryExpr>(op.type, operand, getLocation(op));
     }
     
     return parseCall();
@@ -956,7 +935,7 @@ ExprPtr Parser::parseCall() {
             expr = std::make_shared<CallExpr>(expr, args, expr->location);
         } else if (match(TokenType::DOT)) {
             Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name after '.'");
-            expr = std::make_shared<MemberExpr>(expr, nameToken.lexeme, nameToken.location);
+            expr = std::make_shared<MemberExpr>(expr, nameToken.lexeme, getLocation(nameToken));
         } else if (match(TokenType::LEFT_BRACKET)) {
             auto index = parseExpression();
             expect(TokenType::RIGHT_BRACKET, "Expected ']' after index");
@@ -970,8 +949,6 @@ ExprPtr Parser::parseCall() {
 }
 
 ExprPtr Parser::parsePrimary() {
-    Token token;
-    
     if (match(TokenType::TRUE)) {
         return std::make_shared<LiteralExpr>(true, TokenType::TRUE, 
                                              SourceLocation(filename_, 0, 0, 0));
@@ -993,19 +970,19 @@ ExprPtr Parser::parsePrimary() {
     }
     
     if (match(TokenType::NUMBER)) {
-        token = previous();
+        Token token = previous();
         return std::make_shared<LiteralExpr>(token.getNumber(), TokenType::NUMBER,
                                             getLocation(token));
     }
     
     if (match(TokenType::STRING)) {
-        token = previous();
+        Token token = previous();
         return std::make_shared<LiteralExpr>(token.getString(), TokenType::STRING,
                                             getLocation(token));
     }
     
     if (match(TokenType::IDENTIFIER)) {
-        token = previous();
+        Token token = previous();
         return std::make_shared<IdentifierExpr>(token.lexeme, getLocation(token));
     }
     
@@ -1032,7 +1009,7 @@ ExprPtr Parser::parsePrimary() {
     }
     
     if (match(TokenType::NEW)) {
-        // new 表达�?        auto callee = parsePrimary();
+        auto callee = parsePrimary();
         
         std::vector<ExprPtr> args;
         if (match(TokenType::LEFT_PAREN)) {
@@ -1040,8 +1017,7 @@ ExprPtr Parser::parsePrimary() {
             expect(TokenType::RIGHT_PAREN, "Expected ')' after arguments");
         }
         
-        auto call = std::make_shared<CallExpr>(callee, args, callee->location);
-        return call;
+        return std::make_shared<CallExpr>(callee, args, callee->location);
     }
     
     if (match(TokenType::THIS)) {
@@ -1052,15 +1028,13 @@ ExprPtr Parser::parsePrimary() {
         return std::make_shared<IdentifierExpr>("super", SourceLocation(filename_, 0, 0, 0));
     }
     
-    // 箭头函数简写：坂数 => 表达�?    if (check(TokenType::IDENTIFIER)) {
+    // 箭头函数简写
+    if (check(TokenType::IDENTIFIER)) {
         Token paramToken = peek();
-        
-        // 坑剝查看是坦�?=>
         size_t savedCurrent = current_;
         advance();
         
         if (match(TokenType::ARROW)) {
-            // 这是箭头函数
             current_ = savedCurrent;
             
             std::vector<std::string> params;
@@ -1071,23 +1045,21 @@ ExprPtr Parser::parsePrimary() {
             expect(TokenType::ARROW, "Expected '=>' in arrow function");
             
             if (check(TokenType::LEFT_BRACE)) {
-                // 函数体是�?                auto body = parseBlock();
+                auto body = parseBlock();
                 return std::make_shared<ArrowFunctionExpr>(params, nullptr, body->statements, false,
                                                           getLocation(paramToken));
             } else {
-                // 函数体是表达�?                auto exprBody = parseExpression();
+                auto exprBody = parseExpression();
                 return std::make_shared<ArrowFunctionExpr>(params, exprBody, 
                                                            std::vector<StmtPtr>{}, false,
                                                            getLocation(paramToken));
             }
         }
         
-        // 杢夝
         current_ = savedCurrent;
     }
     
-    // 错误：无法解枝表达弝
-    token = peek();
+    Token token = peek();
     error(token, "Expected expression");
     advance();
     return std::make_shared<LiteralExpr>(std::monostate{}, TokenType::NULL_,
@@ -1098,7 +1070,7 @@ ExprPtr Parser::parseFunctionExpression(bool isAsync) {
     Token nameToken;
     std::string name;
     
-    // 检查是坦有函数�?    if (check(TokenType::IDENTIFIER)) {
+    if (check(TokenType::IDENTIFIER)) {
         nameToken = advance();
         name = nameToken.lexeme;
     }
@@ -1161,8 +1133,7 @@ ExprPtr Parser::parseArrayLiteral() {
     if (!check(TokenType::RIGHT_BRACKET)) {
         do {
             if (match(TokenType::DOT_DOT_DOT)) {
-                // 展开违算�?                auto expr = parseExpression();
-                // 包装戝展开表达弝（这里简化处睆）
+                auto expr = parseExpression();
                 elements.push_back(expr);
             } else {
                 elements.push_back(parseExpression());
@@ -1184,7 +1155,6 @@ ExprPtr Parser::parseObjectLiteral() {
         prop.isMethod = false;
         prop.isShorthand = false;
         
-        // 检查是坦是方法
         if (match(TokenType::FUNCTION)) {
             prop.isMethod = true;
             Token nameToken = expect(TokenType::IDENTIFIER, "Expected method name");
@@ -1205,10 +1175,10 @@ ExprPtr Parser::parseObjectLiteral() {
             
             auto body = parseBlock();
             
-            // 创建函数表达弝作为�?            prop.value = std::make_shared<FunctionExpr>("", params, body->statements, false,
+            prop.value = std::make_shared<FunctionExpr>("", params, body->statements, false,
                                                         SourceLocation(filename_, 0, 0, 0));
         } else if (match(TokenType::GET) || match(TokenType::SET)) {
-            // Getter/Setter - 简化处�?            TokenType type = previous().type;
+            TokenType type = previous().type;
             Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
             prop.key = nameToken.lexeme;
             
@@ -1221,13 +1191,13 @@ ExprPtr Parser::parseObjectLiteral() {
                                                         SourceLocation(filename_, 0, 0, 0));
             prop.isMethod = true;
         } else {
-            // 普通属�?            Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
+            Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
             prop.key = nameToken.lexeme;
             
             if (match(TokenType::COLON)) {
                 prop.value = parseExpression();
             } else {
-                // 简写形�?                prop.isShorthand = true;
+                prop.isShorthand = true;
                 prop.value = std::make_shared<IdentifierExpr>(prop.key, getLocation(nameToken));
             }
         }
