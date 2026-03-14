@@ -63,21 +63,21 @@ target_include_directories(zcc_backend PUBLIC include/backend)
 
 # 创建核心库
 add_library(zcc_core STATIC ${ZCC_CORE_SOURCES})
-target_include_directories(zcc_core PUBLIC include/core)
+target_include_directories(zcc_core PUBLIC include/core include/midend include/backend)
 
 # 创建前端库
 add_library(zcc_frontend STATIC ${ZCC_FRONTEND_SOURCES})
-target_include_directories(zcc_frontend PUBLIC include/frontend)
+target_include_directories(zcc_frontend PUBLIC include/frontend include/core include/midend)
 target_link_libraries(zcc_frontend PUBLIC zcc_core)
 
 # 创建中端库
 add_library(zcc_midend STATIC ${ZCC_MIDEND_SOURCES})
-target_include_directories(zcc_midend PUBLIC include/midend)
+target_include_directories(zcc_midend PUBLIC include/midend include/core include/frontend)
 target_link_libraries(zcc_midend PUBLIC zcc_frontend)
 
 # 创建后端库
 add_library(zcc_backend STATIC ${ZCC_BACKEND_SOURCES})
-target_include_directories(zcc_backend PUBLIC include/backend)
+target_include_directories(zcc_backend PUBLIC include/backend include/core include/midend)
 target_link_libraries(zcc_backend PUBLIC zcc_midend)
 
 if(ZCC_ENABLE_LLVM)
