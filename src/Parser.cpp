@@ -218,11 +218,16 @@ DeclPtr Parser::parseVariableDeclaration(bool isConst) {
 }
 
 DeclPtr Parser::parseFunctionDeclaration() {
-    bool isAsync = previous().type == TokenType::ASYNC;
-
-    if (isAsync && !match(TokenType::FUNCTION)) {
-        error(peek(), "Expected 'function' after 'async'");
+    // 检查是否是 async function
+    bool isAsync = false;
+    if (previous().type == TokenType::ASYNC) {
+        isAsync = true;
+        if (!match(TokenType::FUNCTION)) {
+            error(peek(), "Expected 'function' after 'async'");
+        }
     }
+    // 如果前一个 token 是 FUNCTION，已经被 match 消耗了，不需要再处理
+    // 如果前一个 token 是 ASYNC，已经在上面处理了
 
     // 允许 main 作为函数名
     Token nameToken;
