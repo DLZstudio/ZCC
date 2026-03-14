@@ -107,14 +107,27 @@ std::string Compiler::disassemble(const BytecodeModule& module) {
 }
 
 std::string Compiler::readFile(const std::string& filename) {
-    std::ifstream file(filename);
+    std::ifstream file(filename, std::ios::binary);
     if (!file) {
         return "";
     }
-    
+
     std::stringstream buffer;
     buffer << file.rdbuf();
-    return buffer.str();
+    std::string content = buffer.str();
+    
+    // 处理 Windows 换行符 \r\n -> \n
+    std::string result;
+    result.reserve(content.size());
+    for (size_t i = 0; i < content.size(); ++i) {
+        if (content[i] == '\r' && i + 1 < content.size() && content[i + 1] == '\n') {
+            // 跳过 \r，只保留 \n
+            continue;
+        }
+        result += content[i];
+    }
+    
+    return result;
 }
 
 void Compiler::addDiagnostic(const Diagnostic& diag) {
