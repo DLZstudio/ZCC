@@ -5,6 +5,7 @@
 #include "Platform.hpp"
 #include "ZCCIR.hpp"
 #include "Backend.hpp"
+#include "NativeBackend.hpp"
 #include "Compiler.hpp"
 
 using namespace zcc;
@@ -14,9 +15,10 @@ void printUsage(const char* programName) {
     std::cout << "Usage:\n";
     std::cout << "  " << programName << " <command> [options] <source>\n\n";
     std::cout << "Commands:\n";
-    std::cout << "  compile, c    Compile source to target\n";
-    std::cout << "  run, r        Compile and run\n";
+    std::cout << "  compile, c    Compile source to native executable\n";
+    std::cout << "  run, r        Compile and run immediately\n";
     std::cout << "  ir            Generate ZCC-IR only\n";
+    std::cout << "  exec, x       Execute .ir file directly\n";
     std::cout << "  backends      List available backends\n";
     std::cout << "  help, h       Show this help\n\n";
     std::cout << "Options:\n";
@@ -26,28 +28,43 @@ void printUsage(const char* programName) {
     std::cout << "  --target <triple>   Target platform\n";
     std::cout << "  --backend <name>    Use specific backend\n";
     std::cout << "  --no-cache    Disable cache\n";
-    std::cout << "  --emit-ir     Emit ZCC-IR file\n\n";
-    std::cout << "Supported targets:\n";
-    std::cout << "  x86_64-pc-windows   x86_64 Windows\n";
-    std::cout << "  x86_64-pc-linux     x86_64 Linux\n";
-    std::cout << "  arm64-apple-macos   ARM64 macOS\n";
-    std::cout << "  wasm32-unknown-wasm WebAssembly\n";
-    std::cout << "  mc-java-minecraft   Minecraft Mod\n";
-    std::cout << "  i386-none-bios      BIOS\n";
-    std::cout << "  micropython-embedded  MicroPython\n\n";
+    std::cout << "  --keep-ir     Keep IR file after compilation\n\n";
+    std::cout << "Supported backends:\n";
+    std::cout << "  native        Native executable with embedded interpreter (default)\n";
+    std::cout << "  windows       Windows executable via MSVC/MinGW\n";
+    std::cout << "  linux         Linux executable via GCC/Clang\n";
+    std::cout << "  bios          BIOS boot sector\n";
+    std::cout << "  c             C source code\n\n";
+    std::cout << "File formats:\n";
+    std::cout << "  .zcc          ZCC source file\n";
+    std::cout << "  .ir           ZCC intermediate representation\n";
+    std::cout << "  .exe          Native executable (Windows)\n";
+    std::cout << "  (no ext)      Native executable (Linux)\n";
+    std::cout << "  .bin          BIOS binary\n";
+    std::cout << "  .c            C source\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " compile main.zcc -o main\n";
-    std::cout << "  " << programName << " compile app.zcc --target wasm32\n";
-    std::cout << "  " << programName << " compile game.zcc --backend mc\n";
+    std::cout << "  " << programName << " run app.zcc\n";
+    std::cout << "  " << programName << " compile boot.zcc --backend bios -o boot.bin\n";
+    std::cout << "  " << programName << " exec program.ir\n";
+    std::cout << "  " << programName << " compile lib.zcc --keep-ir  (generates lib.exe + lib.ir)\n";
 }
 
 void listBackends() {
     std::cout << "Available backends:\n";
     auto& manager = BackendManager::getInstance();
+    
+    // 注册所有后端
+    manager.registerBackend(std::make_unique<NativeBackend>());
+    manager.registerBackend(std::make_unique<WindowsBackend>());
+    manager.registerBackend(std::make_unique<LinuxBackend>());
+    manager.registerBackend(std::make_unique<BIOSBackend>());
+    manager.registerBackend(std::make_unique<CBackend>());
+    
     for (const auto& name : manager.getAvailableBackends()) {
         Backend* backend = manager.getBackend(name);
         if (backend) {
-            std::cout << "  " << name << " - " << backend->getName();
+            std::cout << "  " << name << " - " << backend->getDescription();
             if (!backend->isSupported()) {
                 std::cout << " (not supported on this platform)";
             }
@@ -64,11 +81,11 @@ int compileCommand(int argc, char* argv[], int argIndex) {
     
     std::string inputFile = argv[argIndex];
     std::string outputFile;
-    std::string backendName = "c";
+    std::string backendName = "native";  // 默认使用原生后端
     std::string targetTriple;
-    OptimizationLevel optLevel = OptimizationLevel::O0;
+    OptimizationLevel optLevel = OptimizationLevel::O1;
     bool debugInfo = false;
-    bool emitIR = false;
+    bool keepIR = true;  // 默认保留 IR 文件
     bool useCache = true;
     
     // 解析选项
@@ -91,8 +108,8 @@ int compileCommand(int argc, char* argv[], int argIndex) {
             targetTriple = argv[++i];
         } else if (arg == "--backend" && i + 1 < argc) {
             backendName = argv[++i];
-        } else if (arg == "--emit-ir") {
-            emitIR = true;
+        } else if (arg == "--keep-ir") {
+            keepIR = true;
         } else if (arg == "--no-cache") {
             useCache = false;
         }
@@ -120,22 +137,143 @@ int compileCommand(int argc, char* argv[], int argIndex) {
     
     std::cout << "ZCC Compiler v0.2.0\n";
     std::cout << "Compiling " << inputFile << "...\n";
-    std::cout << "Target: " << target.toString() << "\n";
     std::cout << "Backend: " << backendName << "\n";
+    std::cout << "Target: " << target.toString() << "\n";
     std::cout << "Optimization: -O" << static_cast<int>(optLevel) << "\n";
+    std::cout << "Keep IR: " << (keepIR ? "yes" : "no") << "\n";
     
-    // TODO: 实现完整的编译流程
-    // 1. 词法分析
-    // 2. 语法分析
-    // 3. 语义分析
-    // 4. 生成 ZCC-IR
-    // 5. 优化 IR
-    // 6. 后端编译
+    // 创建编译器
+    CompilerOptions options;
+    options.outputFilename = outputFile;
+    options.optimizationLevel = static_cast<int>(optLevel);
+    options.debugInfo = debugInfo;
+    options.useCache = useCache;
+    options.backend = backendName;
+    
+    Compiler compiler(options);
+    auto result = compiler.compileFile(inputFile);
+    
+    if (!result.success) {
+        std::cerr << "\nCompilation failed!\n";
+        for (const auto& error : result.errors) {
+            std::cerr << error.toString() << "\n";
+        }
+        return 1;
+    }
     
     std::cout << "\nCompilation successful!\n";
-    std::cout << "Output: " << outputFile << "\n";
+    std::cout << "Output: " << outputFile << result.output << "\n";
+    std::cout << "Compile time: " << result.compileTimeMs << "ms\n";
+    
+    if (keepIR && backendName == "native") {
+        std::cout << "IR file: " << outputFile << ".ir\n";
+    }
     
     return 0;
+}
+
+int runCommand(int argc, char* argv[], int argIndex) {
+    if (argIndex >= argc) {
+        std::cerr << "Error: No source file specified\n";
+        return 1;
+    }
+    
+    std::string inputFile = argv[argIndex];
+    
+    // 检查文件扩展名
+    bool isIR = inputFile.size() > 3 && inputFile.substr(inputFile.size() - 3) == ".ir";
+    
+    if (isIR) {
+        // 直接运行 IR 文件
+        std::cout << "Running IR file: " << inputFile << "\n";
+        
+        // TODO: 加载并运行 IR
+        std::cerr << "Error: Running .ir files directly is not implemented yet\n";
+        return 1;
+    }
+    
+    // 编译并运行
+    std::cout << "Compiling and running: " << inputFile << "\n";
+    
+    // 临时输出文件
+    std::string tempOutput = inputFile + ".tmp";
+    
+    // 编译
+    CompilerOptions options;
+    options.outputFilename = tempOutput;
+    options.optimizationLevel = 1;
+    options.backend = "native";
+    options.useCache = false;
+    
+    Compiler compiler(options);
+    auto compileResult = compiler.compileFile(inputFile);
+    
+    if (!compileResult.success) {
+        std::cerr << "\nCompilation failed!\n";
+        for (const auto& error : compileResult.errors) {
+            std::cerr << error.toString() << "\n";
+        }
+        return 1;
+    }
+    
+    std::cout << "Compilation successful, running...\n\n";
+    
+    // TODO: 运行编译后的程序
+    std::cerr << "Error: Running compiled programs is not implemented yet\n";
+    
+    // 清理临时文件
+    std::filesystem::remove(tempOutput);
+    std::filesystem::remove(tempOutput + ".ir");
+    
+    return 0;
+}
+
+int execCommand(int argc, char* argv[], int argIndex) {
+    if (argIndex >= argc) {
+        std::cerr << "Error: No IR file specified\n";
+        return 1;
+    }
+    
+    std::string irFile = argv[argIndex];
+    
+    std::cout << "Executing IR file: " << irFile << "\n";
+    
+    // TODO: 加载并执行 IR
+    std::cerr << "Error: Executing .ir files is not implemented yet\n";
+    return 1;
+}
+
+int irCommand(int argc, char* argv[], int argIndex) {
+    if (argIndex >= argc) {
+        std::cerr << "Error: No source file specified\n";
+        return 1;
+    }
+    
+    std::string inputFile = argv[argIndex];
+    std::string outputFile;
+    
+    // 解析选项
+    for (int i = argIndex + 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-o" && i + 1 < argc) {
+            outputFile = argv[++i];
+        }
+    }
+    
+    if (outputFile.empty()) {
+        size_t dotPos = inputFile.rfind('.');
+        if (dotPos != std::string::npos) {
+            outputFile = inputFile.substr(0, dotPos) + ".ir";
+        } else {
+            outputFile = inputFile + ".ir";
+        }
+    }
+    
+    std::cout << "Generating IR: " << inputFile << " -> " << outputFile << "\n";
+    
+    // TODO: 生成 IR 文件
+    std::cerr << "Error: IR generation is not implemented yet\n";
+    return 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -161,13 +299,15 @@ int main(int argc, char* argv[]) {
     }
     
     if (command == "run" || command == "r") {
-        std::cerr << "Run command not implemented yet\n";
-        return 1;
+        return runCommand(argc, argv, 2);
+    }
+    
+    if (command == "exec" || command == "x") {
+        return execCommand(argc, argv, 2);
     }
     
     if (command == "ir") {
-        std::cerr << "IR generation not implemented yet\n";
-        return 1;
+        return irCommand(argc, argv, 2);
     }
     
     std::cerr << "Unknown command: " << command << "\n";

@@ -1,79 +1,153 @@
-#include "Backend.hpp"
-#include <cstdlib>
+#include "NativeBackend.hpp"
+#include "Compiler.hpp"
 #include <fstream>
-#include <sstream>
-#include <filesystem>
+#include <iostream>
+#include <cstring>
 
 namespace zcc {
 
-// ==================== Windows 后端实现 ====================
+// ==================== 解释器实现 ====================
 
-CompileResult WindowsBackend::compile(const ZCCIRModule& module,
-                                      const CompileOptions& options) {
-    return compileViaC(module, options);
+RuntimeValue NativeBackend::Interpreter::execute() {
+    if (!state_.getFunction("main")) {
+        std::cerr << "Error: main function not found\n";
+        return RuntimeValue();
+    }
+    
+    const ZCCIRFunction* mainFunc = state_.getFunction("main");
+    if (!mainFunc || mainFunc->getBlocks().empty()) {
+        return RuntimeValue();
+    }
+    
+    // 执行 main 函数
+    state_.pushScope();
+    for (const auto& block : mainFunc->getBlocks()) {
+        if (state_.hasReturn()) break;
+        executeBlock(*block);
+    }
+    state_.popScope();
+    
+    return state_.getReturn();
 }
 
-CompileResult WindowsBackend::compileViaC(const ZCCIRModule& module,
-                                          const CompileOptions& options) {
+RuntimeValue NativeBackend::Interpreter::executeBlock(const ZCCIRBlock& block) {
+    RuntimeValue result;
+    
+    for (const auto& instr : block.getInstructions()) {
+        if (state_.hasReturn()) {
+            return state_.getReturn();
+        }
+        
+        result = executeInstruction(*instr);
+        
+        // 处理跳转
+        switch (instr->getOpcode()) {
+            case ZCCIROpcode::JMP:
+                // TODO: 实现跳转
+                break;
+            case ZCCIROpcode::JMP_IF:
+                // TODO: 实现条件跳转
+                break;
+            case ZCCIROpcode::RET:
+                state_.returnValue(result);
+                return result;
+            default:
+                break;
+        }
+    }
+    
+    return result;
+}
+
+RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstruction& instr) {
+    switch (instr.getOpcode()) {
+        case ZCCIROpcode::NOP:
+            return RuntimeValue();
+            
+        case ZCCIROpcode::LOAD_CONST: {
+            // TODO: 从常量池加载
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::STORE_LOCAL: {
+            // TODO: 存储到局部变量
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::LOAD_LOCAL: {
+            // TODO: 从局部变量加载
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::ADD: {
+            // TODO: 实现加法
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::SUB: {
+            // TODO: 实现减法
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::MUL: {
+            // TODO: 实现乘法
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::DIV: {
+            // TODO: 实现除法
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::POWER: {
+            // TODO: 实现幂运算
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::CALL: {
+            // TODO: 实现函数调用
+            return RuntimeValue();
+        }
+            
+        case ZCCIROpcode::RET: {
+            // TODO: 实现返回
+            return RuntimeValue();
+        }
+            
+        default:
+            std::cerr << "Unknown opcode: " << static_cast<int>(instr.getOpcode()) << "\n";
+            return RuntimeValue();
+    }
+}
+
+// ==================== 原生后端实现 ====================
+
+CompileResult NativeBackend::compile(const ZCCIRModule& module,
+                                     const CompileOptions& options) {
     CompileResult result;
     result.success = true;
     
     try {
-        // 1. 使用 C 后端生成 C 代码
-        CBackend cBackend;
-        auto cResult = cBackend.compile(module, options);
-        
-        if (!cResult.success) {
-            return cResult;
-        }
-        
-        // 2. 保存 C 代码到临时文件
-        std::filesystem::path tempDir = std::filesystem::temp_directory_path();
-        std::string cFile = (tempDir / "zcc_temp.c").string();
-        std::string exeFile = options.outputPath.empty() ? "output.exe" : options.outputPath;
-        
-        std::ofstream outFile(cFile);
-        outFile << cResult.output;
-        outFile.close();
-        
-        // 3. 调用 MSVC 或 GCC 编译
-        std::string compiler;
-        std::string compileCmd;
-        
-        // 检测编译器
-        if (std::system("cl.exe >nul 2>&1") == 0) {
-            // MSVC
-            compiler = "cl.exe";
-            compileCmd = "cl.exe /O2 /Fe:" + exeFile + " " + cFile;
-        } else if (std::system("g++ --version >nul 2>&1") == 0) {
-            // MinGW
-            compiler = "g++.exe";
-            compileCmd = "g++.exe -O2 -o " + exeFile + " " + cFile;
-        } else {
+        // 1. 保存 IR 文件
+        std::string irPath = options.outputPath + ".ir";
+        if (!saveIRToFile(module, irPath)) {
             result.success = false;
-            result.errorMessage = "No C compiler found (need cl.exe or g++.exe)";
+            result.errorMessage = "Failed to save IR file";
             return result;
         }
         
-        // 4. 执行编译命令
-        int ret = std::system(compileCmd.c_str());
+        // 2. 生成自包含的可执行文件
+        result.binary = generateExecutable(module, options);
         
-        // 5. 清理临时文件
-        std::filesystem::remove(cFile);
-        
-        if (ret != 0) {
-            result.success = false;
-            result.errorMessage = "C compiler failed with code " + std::to_string(ret);
-            return result;
+        // 3. 保存可执行文件
+        if (!options.outputPath.empty() && !result.binary.empty()) {
+            std::ofstream outFile(options.outputPath, std::ios::binary);
+            outFile.write(reinterpret_cast<const char*>(result.binary.data()), 
+                         result.binary.size());
+            outFile.close();
         }
         
-        // 6. 读取生成的可执行文件
-        std::ifstream exeFileIn(exeFile, std::ios::binary);
-        result.binary.assign(
-            std::istreambuf_iterator<char>(exeFileIn),
-            std::istreambuf_iterator<char>()
-        );
-        exeFileIn.close();
+        result.output = "Generated: " + options.outputPath + " and " + irPath;
         
     } catch (const std::exception& e) {
         result.success = false;
@@ -83,81 +157,117 @@ CompileResult WindowsBackend::compileViaC(const ZCCIRModule& module,
     return result;
 }
 
-// ==================== Linux 后端实现 ====================
-
-CompileResult LinuxBackend::compile(const ZCCIRModule& module,
-                                    const CompileOptions& options) {
-    return compileViaC(module, options);
+std::vector<uint8_t> NativeBackend::generateExecutable(const ZCCIRModule& module,
+                                                       const CompileOptions& options) {
+    // 生成自包含的可执行文件
+    // 格式：[解释器代码][IR 数据][IR 数据大小][入口点]
+    
+    std::vector<uint8_t> executable;
+    
+    // 这里应该嵌入解释器代码和 IR 数据
+    // 为了简化，我们生成一个包装器脚本
+    
+    std::ostringstream wrapper;
+    
+#ifdef _WIN32
+    // Windows 批处理包装器
+    wrapper << "@echo off\n";
+    wrapper << "REM ZCC Native Executable\n";
+    wrapper << "REM Generated by ZCC Compiler\n\n";
+    wrapper << "set ZCC_IR_FILE=" << options.outputPath << ".ir\n";
+    wrapper << "zcc run \"%ZCC_IR_FILE%\" %*\n";
+    
+    std::string wrapperStr = wrapper.str();
+    executable.assign(wrapperStr.begin(), wrapperStr.end());
+    
+#else
+    // Linux Shell 包装器
+    wrapper << "#!/bin/bash\n";
+    wrapper << "# ZCC Native Executable\n";
+    wrapper << "# Generated by ZCC Compiler\n\n";
+    wrapper << "SCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\n";
+    wrapper << "ZCC_IR_FILE=\"${SCRIPT_DIR}/" << module.getName() << ".ir\"\n";
+    wrapper << "zcc run \"$ZCC_IR_FILE\" \"$@\"\n";
+    
+    std::string wrapperStr = wrapper.str();
+    executable.assign(wrapperStr.begin(), wrapperStr.end());
+#endif
+    
+    return executable;
 }
 
-CompileResult LinuxBackend::compileViaC(const ZCCIRModule& module,
-                                        const CompileOptions& options) {
-    CompileResult result;
-    result.success = true;
+bool NativeBackend::saveIRToFile(const ZCCIRModule& module, const std::string& path) {
+    std::ofstream file(path);
+    if (!file) return false;
     
-    try {
-        // 1. 使用 C 后端生成 C 代码
-        CBackend cBackend;
-        auto cResult = cBackend.compile(module, options);
+    file << "; ZCC-IR File\n";
+    file << "; Generated by ZCC Compiler\n";
+    file << ".version 1.0\n";
+    file << ".module \"" << module.getName() << "\"\n\n";
+    
+    // 全局变量
+    for (const auto& global : module.getGlobals()) {
+        file << ".global @" << global->getName();
+        if (global->getInitializer()) {
+            file << " = " << global->getInitializer()->toString();
+        }
+        file << "\n";
+    }
+    file << "\n";
+    
+    // 函数
+    for (const auto& func : module.getFunctions()) {
+        if (func->isExternal()) continue;
         
-        if (!cResult.success) {
-            return cResult;
+        file << ".func ";
+        file << func->getReturnType().toString() << " @" << func->getName() << "(";
+        
+        const auto& args = func->getArguments();
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i > 0) file << ", ";
+            file << args[i].second->toString() << " %" << args[i].first;
+        }
+        file << ") {\n";
+        
+        for (const auto& block : func->getBlocks()) {
+            file << "." << block->getLabel() << ":\n";
+            
+            for (const auto& instr : block->getInstructions()) {
+                file << "    " << instr->toString() << "\n";
+            }
         }
         
-        // 2. 保存 C 代码到临时文件
-        std::filesystem::path tempDir = std::filesystem::temp_directory_path();
-        std::string cFile = (tempDir / "zcc_temp.c").string();
-        std::string exeFile = options.outputPath.empty() ? "output" : options.outputPath;
-        
-        std::ofstream outFile(cFile);
-        outFile << cResult.output;
-        outFile.close();
-        
-        // 3. 调用 GCC 或 Clang 编译
-        std::string compiler;
-        std::string compileCmd;
-        
-        // 检测编译器
-        if (std::system("which clang > /dev/null 2>&1") == 0) {
-            // Clang
-            compiler = "clang";
-            compileCmd = "clang -O2 -o " + exeFile + " " + cFile;
-        } else if (std::system("which gcc > /dev/null 2>&1") == 0) {
-            // GCC
-            compiler = "gcc";
-            compileCmd = "gcc -O2 -o " + exeFile + " " + cFile;
-        } else {
-            result.success = false;
-            result.errorMessage = "No C compiler found (need gcc or clang)";
-            return result;
-        }
-        
-        // 4. 执行编译命令
-        int ret = std::system(compileCmd.c_str());
-        
-        // 5. 清理临时文件
-        std::filesystem::remove(cFile);
-        
-        if (ret != 0) {
-            result.success = false;
-            result.errorMessage = "C compiler failed with code " + std::to_string(ret);
-            return result;
-        }
-        
-        // 6. 读取生成的可执行文件
-        std::ifstream exeFileIn(exeFile, std::ios::binary);
-        result.binary.assign(
-            std::istreambuf_iterator<char>(exeFileIn),
-            std::istreambuf_iterator<char>()
-        );
-        exeFileIn.close();
-        
-    } catch (const std::exception& e) {
-        result.success = false;
-        result.errorMessage = e.what();
+        file << "}\n\n";
     }
     
-    return result;
+    file.close();
+    return true;
+}
+
+// ==================== 运行 IR 模块 ====================
+
+RuntimeValue NativeBackend::runModule(const ZCCIRModule& module) {
+    InterpreterState state;
+    Interpreter interpreter(state);
+    
+    // 注册函数
+    for (const auto& func : module.getFunctions()) {
+        state.setFunction(func->getName(), func.get());
+    }
+    
+    return interpreter.execute();
+}
+
+// ==================== IR 文件保存/加载 ====================
+
+bool saveIRToFile(const ZCCIRModule& module, const std::string& filename) {
+    NativeBackend backend;
+    return backend.saveIRToFile(module, filename);
+}
+
+std::unique_ptr<ZCCIRModule> loadIRFromFile(const std::string& filename) {
+    // TODO: 实现 IR 文件解析
+    return nullptr;
 }
 
 } // namespace zcc

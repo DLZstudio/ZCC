@@ -50,12 +50,16 @@ set(ZCC_BACKEND_SOURCES
     src/backend/BackendManager.cpp
     src/backend/CBackend.cpp
     src/backend/NativeBackend.cpp
+    src/backend/NativeBackend.hpp
     src/backend/BIOSBackend.cpp
 )
 
 if(ZCC_ENABLE_LLVM)
     list(APPEND ZCC_BACKEND_SOURCES src/backend/LLVMBackend.cpp)
 endif()
+
+# 添加后端头文件到 include 目录
+target_include_directories(zcc_backend PUBLIC include/backend)
 
 # 创建核心库
 add_library(zcc_core STATIC ${ZCC_CORE_SOURCES})
