@@ -6,6 +6,7 @@
 #include <memory>
 #include <variant>
 #include <unordered_map>
+#include "Platform.hpp"
 
 namespace zcc {
 
@@ -136,17 +137,16 @@ public:
     explicit ArrayType(ZCCTypePtr element)
         : ZCCType(TypeKind::ARRAY, element->getName() + "[]"),
           elementType_(std::move(element)), size_(0) {}
-    
+
     bool isArray() const override { return true; }
     bool equals(const ZCCType& other) const override;
     std::string toString() const override;
-    size_t getSize() const override;
+    size_t getSize() const override { return size_; }
     size_t getAlignment() const override;
-    
+
     const ZCCTypePtr& getElementType() const { return elementType_; }
-    size_t getSize() const { return size_; }
     bool isDynamic() const { return size_ == 0; }
-    
+
 private:
     ZCCTypePtr elementType_;
     size_t size_;

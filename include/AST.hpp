@@ -745,12 +745,12 @@ struct ExportDecl : Declaration {
 struct Program : ASTNode {
     std::vector<DeclPtr> declarations;
     std::string sourceFilename;
-    
+
     Program(std::string filename = "<input>")
         : sourceFilename(std::move(filename)) {
         location = SourceLocation(sourceFilename, 0, 0, 0);
     }
-    
+
     std::string toString() const override {
         std::string result;
         for (const auto& decl : declarations) {
@@ -758,6 +758,52 @@ struct Program : ASTNode {
         }
         return result;
     }
+};
+
+// ==================== AST 访问者 ====================
+
+// AST 访问者基类
+class ASTVisitor {
+public:
+    virtual ~ASTVisitor() = default;
+
+    // 声明访问
+    virtual void visitProgram(Program* program) = 0;
+    virtual void visitFunctionDecl(FunctionDecl* decl) = 0;
+    virtual void visitVariableDecl(VariableDecl* decl) = 0;
+    virtual void visitClassDecl(ClassDecl* decl) = 0;
+    virtual void visitModuleDecl(ModuleDecl* decl) = 0;
+    virtual void visitImportDecl(ImportDecl* decl) = 0;
+    virtual void visitExportDecl(ExportDecl* decl) = 0;
+
+    // 语句访问
+    virtual void visitBlockStmt(BlockStmt* stmt) = 0;
+    virtual void visitExpressionStmt(ExpressionStmt* stmt) = 0;
+    virtual void visitIfStmt(IfStmt* stmt) = 0;
+    virtual void visitForStmt(ForStmt* stmt) = 0;
+    virtual void visitForEachStmt(ForEachStmt* stmt) = 0;
+    virtual void visitWhileStmt(WhileStmt* stmt) = 0;
+    virtual void visitReturnStmt(ReturnStmt* stmt) = 0;
+    virtual void visitBreakStmt(BreakStmt* stmt) = 0;
+    virtual void visitContinueStmt(ContinueStmt* stmt) = 0;
+    virtual void visitThrowStmt(ThrowStmt* stmt) = 0;
+    virtual void visitTryStmt(TryStmt* stmt) = 0;
+    virtual void visitSwitchStmt(SwitchStmt* stmt) = 0;
+
+    // 表达式访问
+    virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
+    virtual void visitIdentifierExpr(IdentifierExpr* expr) = 0;
+    virtual void visitBinaryExpr(BinaryExpr* expr) = 0;
+    virtual void visitUnaryExpr(UnaryExpr* expr) = 0;
+    virtual void visitAssignExpr(AssignExpr* expr) = 0;
+    virtual void visitCallExpr(CallExpr* expr) = 0;
+    virtual void visitMemberExpr(MemberExpr* expr) = 0;
+    virtual void visitIndexExpr(IndexExpr* expr) = 0;
+    virtual void visitArrayExpr(ArrayExpr* expr) = 0;
+    virtual void visitObjectExpr(ObjectExpr* expr) = 0;
+    virtual void visitFunctionExpr(FunctionExpr* expr) = 0;
+    virtual void visitArrowFunctionExpr(ArrowFunctionExpr* expr) = 0;
+    virtual void visitTernaryExpr(TernaryExpr* expr) = 0;
 };
 
 } // namespace zcc

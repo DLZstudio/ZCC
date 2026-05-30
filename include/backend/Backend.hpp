@@ -6,41 +6,9 @@
 #include <memory>
 #include "ZCCIR.hpp"
 #include "Platform.hpp"
+#include "Common.hpp"
 
 namespace zcc {
-
-// 编译选项
-enum class OptimizationLevel {
-    O0,  // 无优化
-    O1,  // 基础优化
-    O2,  // 中级优化
-    O3,  // 高级优化
-    Os,  // 大小优化
-    Oz,  // 极致大小优化
-};
-
-struct CompileOptions {
-    OptimizationLevel optimization = OptimizationLevel::O0;
-    bool debugInfo = false;
-    bool emitAssembly = false;
-    std::vector<std::string> includePaths;
-    std::vector<std::string> defines;
-    std::string outputPath;
-    std::string targetTriple;
-};
-
-// 编译结果
-struct CompileResult {
-    bool success;
-    std::string output;
-    std::vector<uint8_t> binary;
-    std::vector<std::string> errors;
-    std::vector<std::string> warnings;
-    std::string errorMessage;
-    
-    bool hasErrors() const { return !errors.empty(); }
-    bool hasWarnings() const { return !warnings.empty(); }
-};
 
 // ==================== 后端接口 ====================
 

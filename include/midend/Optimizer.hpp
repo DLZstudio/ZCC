@@ -2,6 +2,7 @@
 #define ZCC_OPTIMIZER_HPP
 
 #include "ZCCIR.hpp"
+#include "Common.hpp"
 #include <memory>
 #include <functional>
 #include <set>
@@ -9,15 +10,7 @@
 
 namespace zcc {
 
-// 优化级别
-enum class OptimizationLevel {
-    O0,  // 无优化
-    O1,  // 基础优化
-    O2,  // 中级优化
-    O3,  // 高级优化
-    Os,  // 大小优化
-    Oz,  // 极致大小优化
-};
+// 使用 Common.hpp 中定义的 OptimizationLevel
 
 // 优化 Pass 基类
 class OptimizationPass {

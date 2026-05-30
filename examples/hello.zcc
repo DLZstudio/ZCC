@@ -1,8 +1,0 @@
-// hello.zcc - ZCC 语言示例
-// Hello World 程序
-
-函数 主函数 () {
-    打印行 ("你好，世界!");
-    打印行 ("Hello, World!");
-    返回 0;
-}

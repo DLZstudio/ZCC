@@ -123,22 +123,22 @@ class ZCCIRModule;
 class ZCCIRValue {
 public:
     using ID = uint32_t;
-    
-    ZCCIRValue(ZCCIRValueKind kind, ZCCType type, ID id)
+
+    ZCCIRValue(ZCCIRValueKind kind, ZCCTypePtr type, ID id)
         : kind_(kind), type_(std::move(type)), id_(id) {}
-    
+
     virtual ~ZCCIRValue() = default;
-    
+
     ZCCIRValueKind getKind() const { return kind_; }
-    const ZCCType& getType() const { return type_; }
+    const ZCCTypePtr& getType() const { return type_; }
     ID getID() const { return id_; }
-    
+
     std::string getName() const;
     void setName(const std::string& name);
-    
+
 private:
     ZCCIRValueKind kind_;
-    ZCCType type_;
+    ZCCTypePtr type_;
     ID id_;
     std::string name_;
 };
@@ -154,15 +154,15 @@ public:
         std::string,     // 字符串
         std::vector<uint8_t> // 二进制
     >;
-    
-    ZCCIRConstant(ConstantValue value, ZCCType type, ID id)
+
+    ZCCIRConstant(ConstantValue value, ZCCTypePtr type, ID id)
         : ZCCIRValue(ZCCIRValueKind::CONSTANT, std::move(type), id),
           value_(std::move(value)) {}
-    
+
     const ConstantValue& getValue() const { return value_; }
-    
+
     std::string toString() const;
-    
+
 private:
     ConstantValue value_;
 };
@@ -191,40 +191,40 @@ class ZCCIRInstruction {
 public:
     using OperandList = std::vector<ZCCIROperand>;
     using ID = uint32_t;
-    
-    ZCCIRInstruction(ZCCIROpcode opcode, ZCCType type, ID id)
+
+    ZCCIRInstruction(ZCCIROpcode opcode, ZCCTypePtr type, ID id)
         : opcode_(opcode), type_(std::move(type)), id_(id) {}
-    
+
     ZCCIROpcode getOpcode() const { return opcode_; }
-    const ZCCType& getType() const { return type_; }
+    const ZCCTypePtr& getType() const { return type_; }
     ID getID() const { return id_; }
-    
+
     // 操作数
     size_t getNumOperands() const { return operands_.size(); }
     ZCCIROperand& getOperand(size_t idx) { return operands_[idx]; }
     const ZCCIROperand& getOperand(size_t idx) const { return operands_[idx]; }
     void setOperand(size_t idx, ZCCIROperand operand);
     void addOperand(ZCCIROperand operand);
-    
+
     // 块引用
     ZCCIRBlock* getParent() const { return parent_; }
     void setParent(ZCCIRBlock* block) { parent_ = block; }
-    
+
     // 调试信息
     void setDebugLocation(std::string file, size_t line, size_t column);
     const std::string& getDebugFile() const { return debugFile_; }
     size_t getDebugLine() const { return debugLine_; }
     size_t getDebugColumn() const { return debugColumn_; }
-    
+
     std::string toString() const;
-    
+
 private:
     ZCCIROpcode opcode_;
-    ZCCType type_;
+    ZCCTypePtr type_;
     ID id_;
     OperandList operands_;
     ZCCIRBlock* parent_ = nullptr;
-    
+
     // 调试信息
     std::string debugFile_;
     size_t debugLine_ = 0;
@@ -275,34 +275,34 @@ private:
 class ZCCIRFunction {
 public:
     using BlockList = std::vector<std::unique_ptr<ZCCIRBlock>>;
-    using ArgumentList = std::vector<std::pair<std::string, ZCCType>>;
-    
-    ZCCIRFunction(std::string name, ZCCType returnType, ArgumentList args)
+    using ArgumentList = std::vector<std::pair<std::string, ZCCTypePtr>>;
+
+    ZCCIRFunction(std::string name, ZCCTypePtr returnType, ArgumentList args)
         : name_(std::move(name)), returnType_(std::move(returnType)),
           arguments_(std::move(args)) {}
-    
+
     const std::string& getName() const { return name_; }
-    const ZCCType& getReturnType() const { return returnType_; }
+    const ZCCTypePtr& getReturnType() const { return returnType_; }
     const ArgumentList& getArguments() const { return arguments_; }
-    
+
     // 基本块
     ZCCIRBlock* createBlock(const std::string& label);
     const BlockList& getBlocks() const { return blocks_; }
     ZCCIRBlock* getEntryBlock() const { return blocks_.front().get(); }
-    
+
     // 属性
     bool isExternal() const { return isExternal_; }
     void setExternal(bool ext) { isExternal_ = ext; }
-    
+
     bool isInline() const { return isInline_; }
     void setInline(bool inl) { isInline_ = inl; }
-    
+
     // 局部变量
-    size_t addLocal(const std::string& name, const ZCCType& type);
-    
+    size_t addLocal(const std::string& name, const ZCCTypePtr& type);
+
 private:
     std::string name_;
-    ZCCType returnType_;
+    ZCCTypePtr returnType_;
     ArgumentList arguments_;
     BlockList blocks_;
     bool isExternal_ = false;
@@ -315,19 +315,19 @@ private:
 // ZCC-IR 全局变量
 class ZCCIRGlobal {
 public:
-    ZCCIRGlobal(std::string name, ZCCType type, std::shared_ptr<ZCCIRConstant> init)
+    ZCCIRGlobal(std::string name, ZCCTypePtr type, std::shared_ptr<ZCCIRConstant> init)
         : name_(std::move(name)), type_(std::move(type)), initializer_(std::move(init)) {}
-    
+
     const std::string& getName() const { return name_; }
-    const ZCCType& getType() const { return type_; }
+    const ZCCTypePtr& getType() const { return type_; }
     const std::shared_ptr<ZCCIRConstant>& getInitializer() const { return initializer_; }
-    
+
     bool isConstant() const { return isConstant_; }
     void setConstant(bool c) { isConstant_ = c; }
-    
+
 private:
     std::string name_;
-    ZCCType type_;
+    ZCCTypePtr type_;
     std::shared_ptr<ZCCIRConstant> initializer_;
     bool isConstant_ = false;
 };
@@ -351,34 +351,34 @@ public:
     using FunctionList = std::vector<std::unique_ptr<ZCCIRFunction>>;
     using GlobalList = std::vector<std::unique_ptr<ZCCIRGlobal>>;
     using ConstantList = std::vector<std::shared_ptr<ZCCIRConstant>>;
-    
+
     ZCCIRModule(std::string name) : name_(std::move(name)) {}
-    
+
     const std::string& getName() const { return name_; }
-    
+
     // 函数
-    ZCCIRFunction* createFunction(const std::string& name, ZCCType returnType,
+    ZCCIRFunction* createFunction(const std::string& name, ZCCTypePtr returnType,
                                   ZCCIRFunction::ArgumentList args);
     const FunctionList& getFunctions() const { return functions_; }
     ZCCIRFunction* getFunction(const std::string& name);
-    
+
     // 全局变量
-    ZCCIRGlobal* createGlobal(const std::string& name, ZCCType type,
+    ZCCIRGlobal* createGlobal(const std::string& name, ZCCTypePtr type,
                               std::shared_ptr<ZCCIRConstant> init = nullptr);
     const GlobalList& getGlobals() const { return globals_; }
-    
+
     // 常量
-    std::shared_ptr<ZCCIRConstant> createConstant(ZCCIRConstant::ConstantValue value, ZCCType type);
+    std::shared_ptr<ZCCIRConstant> createConstant(ZCCIRConstant::ConstantValue value, ZCCTypePtr type);
     const ConstantList& getConstants() const { return constants_; }
-    
+
     // 元数据
     ZCCIRMetadata& getMetadata() { return metadata_; }
     const ZCCIRMetadata& getMetadata() const { return metadata_; }
-    
+
     // 序列化
     std::string serialize() const;
     static std::unique_ptr<ZCCIRModule> deserialize(const std::string& ir);
-    
+
 private:
     std::string name_;
     FunctionList functions_;
