@@ -653,13 +653,28 @@ inline void IRGenerator::visitUnaryExpr(UnaryExpr* expr) {
 }
 
 inline void IRGenerator::visitAssignExpr(AssignExpr* expr) {
+    ZCCIRValue::ID value = generateExpression(expr->value);
+    
+    // 复杂目标: arr[i] = val 或 obj.prop = val
+    if (expr->targetExpr) {
+        if (auto idx = dynamic_cast<IndexExpr*>(expr->targetExpr.get())) {
+            ZCCIRValue::ID obj = generateExpression(idx->object);
+            ZCCIRValue::ID i = generateExpression(idx->index);
+            emitInstruction(ZCCIROpcode::ARRAY_SET, {obj, i, value});
+        } else if (auto mem = dynamic_cast<MemberExpr*>(expr->targetExpr.get())) {
+            ZCCIRValue::ID obj = generateExpression(mem->object);
+            ZCCIRValue::ID key = emitConstant(mem->property, getString());
+            emitInstruction(ZCCIROpcode::OBJECT_SET, {obj, key, value});
+        }
+        return;
+    }
+    
+    // 简单目标: x = val
     ZCCIRValue::ID varID = lookupVariable(expr->target);
     if (varID == 0) {
         error(expr->location, "Undefined variable: " + expr->target);
         return;
     }
-    
-    ZCCIRValue::ID value = generateExpression(expr->value);
     emitInstruction(ZCCIROpcode::STORE, {varID, value});
 }
 
@@ -938,7 +953,7 @@ inline void IRGenerator::visitFunctionExpr(FunctionExpr* expr) {
     
     // 声明参数
     for (size_t i = 0; i < expr->parameters.size(); ++i) {
-        declareVariable(expr->parameters[i], i);
+        declareVariable(expr->parameters[i], nextValueID_++);
     }
     
     // 生成函数体
@@ -976,7 +991,9 @@ inline void IRGenerator::visitArrowFunctionExpr(ArrowFunctionExpr* expr) {
     enterScope(true);
     
     for (size_t i = 0; i < expr->parameters.size(); ++i) {
-        declareVariable(expr->parameters[i], i);
+        // 使用 nextValueID_++ 避免 ID 0 冲突 (0 = 未找到)
+        ZCCIRValue::ID paramID = nextValueID_++;
+        declareVariable(expr->parameters[i], paramID);
     }
     
     currentBlock_ = innerFunc->createBlock("entry");

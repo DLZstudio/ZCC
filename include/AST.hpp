@@ -131,11 +131,19 @@ struct UnaryExpr : Expression {
 
 // 赋值表达式
 struct AssignExpr : Expression {
-    std::string target;
+    std::string target;       // 简单目标: 变量名
+    ExprPtr targetExpr;       // 复杂目标: IndexExpr(arr,i) 或 MemberExpr(obj,prop)
     ExprPtr value;
     
+    // 简单赋值: x = val
     AssignExpr(std::string t, ExprPtr v, const SourceLocation& loc)
         : target(std::move(t)), value(std::move(v)) {
+        location = loc;
+    }
+    
+    // 复杂赋值: arr[i] = val 或 obj.p = val
+    AssignExpr(ExprPtr t, ExprPtr v, const SourceLocation& loc)
+        : targetExpr(std::move(t)), value(std::move(v)) {
         location = loc;
     }
     
@@ -144,6 +152,7 @@ struct AssignExpr : Expression {
     }
     
     std::string toString() const override {
+        if (targetExpr) return targetExpr->toString() + " = " + value->toString();
         return target + " = " + value->toString();
     }
 };

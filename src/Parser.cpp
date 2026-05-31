@@ -794,6 +794,14 @@ ExprPtr Parser::parseAssignment() {
         if (auto ident = std::dynamic_pointer_cast<IdentifierExpr>(expr)) {
             return std::make_shared<AssignExpr>(ident->name, value, ident->location);
         }
+        // arr[i] = val  — 数组索引赋值
+        if (auto idx = std::dynamic_pointer_cast<IndexExpr>(expr)) {
+            return std::make_shared<AssignExpr>(expr, value, idx->location);
+        }
+        // obj.prop = val  — 对象属性赋值
+        if (auto mem = std::dynamic_pointer_cast<MemberExpr>(expr)) {
+            return std::make_shared<AssignExpr>(expr, value, mem->location);
+        }
         error(previous(), "Invalid assignment target");
     }
     
