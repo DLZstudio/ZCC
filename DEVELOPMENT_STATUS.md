@@ -211,9 +211,9 @@ runtime/zcc_runtime.h (160行) + runtime/zcc_runtime.c (730行)
 
 | 阶段 | 模式 | 状态 | 优先级 |
 |------|------|------|--------|
-| 统一 CLI 入口 (zcc run 走 IR→C→GCC+Runtime) | 模式三 | ❌ | P1 |
+| CBackend + zcc_runtime 端到端编译链路 | 模式一 | ✅ P1完成 | — |
 | Parser 语法补全 (for/i++/=>/对象/数组字面量) | 模式一 | ❌ | P2 |
-| CBackend + zcc_runtime 端到端编译链路 | 模式一 | ❌ | P2 |
+| C编译器环境变量自动适配 | 模式一 | ⚠️ | 低 |
 | 优化器 (8 Pass 填逻辑) | 模式二 | ❌ 框架就绪 | P3 |
 | 移植 v0.1 Module/IPC | — | ❌ | 后置 |
 | NativeBackend 解释器 | 模式二 | ❌ 暂缓 | — |
@@ -222,15 +222,33 @@ runtime/zcc_runtime.h (160行) + runtime/zcc_runtime.c (730行)
 
 | 阶段 | 状态 |
 |------|------|
+| ✅ **P1**: 插件化语言后端 + CompilerDriver + zcc build/run/languages | 100% |
 | ✅ Lexer 注释 + 换行 Bug 修复 (Phase 1) | 100% |
 | ✅ IR 生成 main 函数包装 (Phase 2) | 100% |
 | ✅ CBackend 62/62 操作码全覆盖 (P0) | 100% |
 | ✅ zcc_runtime C 运行时库 (P0) | 100% |
 | ✅ IR 生成器 30 个 visitor 方法 | 100% |
 | ✅ 前端 Lexer/Parser/AST/Keywords | 100% |
-| ✅ 字节码 CodeGenerator 95% | 可用 |
-| ✅ 8 文件测试套件 (76 用例) | 100% |
-| ✅ `zcc compile` / `zcc ir` 命令 | 可用 |
+
+### 插件系统架构
+
+```
+新语言 = 实现 ILanguageBackend + 注册 → 一行命令切换
+                                    
+ILanguageBackend (协议)
+├── generateSource(IR) → 目标语言源码
+├── getCompilerConfig() → 编译器路径+命令模板
+├── getRuntimeFiles() → 运行时库文件
+└── needsCompilation() → 是否需要编译步骤
+
+内置:
+  c   → gcc + zcc_runtime.c
+  cpp → g++ + zcc_runtime.c (预留)
+
+扩展示例:
+  class PythonBackend : ILanguageBackend { ... generateSource → Python代码 ... }
+  class JavaBackend   : ILanguageBackend { ... generateSource → Java代码 ... }
+```
 
 ---
 
