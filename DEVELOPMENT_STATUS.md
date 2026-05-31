@@ -96,7 +96,34 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 | **visitTryStmt** | **try-catch-finally** | ✅ 新 |
 | **visitClassDecl** | **类声明** | ✅ 新 |
 
-### 1.6 桩文件 (compat_stubs.cpp)
+### 1.6 IR 管线集成 — ✅ (P1 完成)
+
+```
+.zcc → Lexer → Parser → IRGenerator → ZCCIRModule → toText() → .ir 文件
+```
+
+新增 CLI 命令：`zcc ir test.zcc` — 完整 IR 文本输出。
+
+### 1.7 CBackend IR 操作码全覆盖 — ✅ (P0 完成)
+
+62 个 IR 操作码的 C 代码生成已全部实现：
+
+| 类别 | 操作码 | C 映射 |
+|------|--------|--------|
+| 算术 | ADD/SUB/MUL/DIV/MOD/NEG/INC/DEC/POW | 直接 C 运算符 + pow() |
+| 位运算 | AND/OR/XOR/NOT/SHL/SHR | 直接 C 运算符 |
+| 比较 | CMP_EQ/NE/LT/LE/GT/GE | 直接 C 比较运算符 |
+| 内存 | LOAD/STORE/ALLOCA/ALLOC/FREE | 赋值 / malloc / free |
+| 类型转换 | TRUNC/ZEXT/SEXT/FP* | C 强制类型转换 |
+| 控制流 | JMP/JMP_IF/JMP_IF_NOT/CALL/RET/PHI | goto / if / return / 注释 |
+| 高精度 | BIG_ADD/SUB/MUL/DIV/MOD/CMP/POW | bignum_* 运行时函数 |
+| 字符串 | STR_CONCAT/LEN/CMP/SLICE | str* / zcc_* 运行时函数 |
+| 数组 | ARRAY_NEW/GET/SET/LEN | zcc_array_* 运行时函数 |
+| 对象 | OBJECT_NEW/GET/SET | zcc_object_* 运行时函数 |
+| 异常 | THROW | zcc_throw() 运行时函数 |
+| 特殊 | NOP/INTRINSIC/ASSEMBLY/TRAP/UNREACHABLE | 注释 / __asm__ / abort |
+
+### 1.8 桩文件 (compat_stubs.cpp)
 
 提供头文件中声明但未实现的方法：
 
@@ -125,17 +152,21 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
                                │
                     ┌──────────┴──────────┐
                     │                     │
-              旧路径(可用)           新路径(架构就绪)
+              旧路径(可用)           新 IR 路径(可用)
                     │                     │
-              Compiler.compile()    core/Compiler (待集成)
+              Compiler.compile()       irCommand()
                     │                     │
          Lexer → Parser          Lexer → Parser
                     │                     │
          CodeGenerator              IRGenerator ✅
                     │                     │
-         BytecodeModule             Optimizer ❌
+         BytecodeModule         ZCCIRModule::toText()
                     │                     │
-              .zbc 字节码           Backend ⚠️
+              .zbc 字节码            .ir 文本文件
+                                          │
+                                    CBackend (62/62 opcodes)
+                                          │
+                                     .c C 源文件
 ```
 
 ---
@@ -144,21 +175,18 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 
 | 阶段 | 状态 | 预计工作量 |
 |------|------|-----------|
-| 优化器 (8 Pass 填逻辑) | ❌ 框架就绪，全 TODO | 大 |
-| NativeBackend 解释器 | ❌ 框架就绪，指令全 TODO | 大 |
-| CBackend 补齐操作码 | ⚠️ 基础可用，部分 TODO | 中 |
-| main.cpp `run/ir/exec` 子命令 | ❌ 全部桩 | 中 |
-| core/Compiler.cpp 管线集成 | ❌ 未接入 | 中 |
-| 新管线端到端测试 | ❌ | 小 |
+| **优化器 (8 Pass 填逻辑)** | ❌ 框架就绪，全 TODO | 大 ← 下一步 |
+| NativeBackend 解释器 | ❌ 暂缓 (用 GCC/Clang 代替) | — |
+| main.cpp `run/exec` 子命令 | ❌ 全部桩 | 中 |
 | 换行符 lexer bug | ⚠️ | 小 |
-| 移植 v0.1 新语法 | ❌ | 后置 |
-| 移植 v0.1 Module/IPC | ❌ | 后置 |
+| 移植 v0.1 新语法 | ❌ 后置 | 中 |
+| 移植 v0.1 Module/IPC | ❌ 后置 | 中 |
 
 ---
 
 ## 四、文件清单
 
-### 源文件 (13 个)
+### 源文件 (14 个)
 
 | 文件 | 行数 | 状态 |
 |------|------|------|
@@ -166,15 +194,15 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 | src/Parser.cpp | 1243 | ✅ 完成 |
 | src/Compiler.cpp | 108 | ✅ 完成 |
 | src/CodeGenerator.cpp | 1033 | ✅ 完成 |
-| src/main.cpp | 320 | ✅ 完成 |
+| src/main.cpp | 340 | ✅ 完成 |
 | src/midend/Optimizer.cpp | 344 | ⚠️ 框架就绪 |
 | src/midend/IRGenerator.cpp | 3 | ✅ 编译入口 |
 | src/backend/BackendManager.cpp | 77 | ✅ 完成 |
-| src/backend/CBackend.cpp | 288 | ⚠️ 部分 |
-| src/backend/NativeBackend.cpp | 253 | ⚠️ 部分 |
+| src/backend/CBackend.cpp | 368 | ✅ 62/62 操作码 |
+| src/backend/NativeBackend.cpp | 253 | ⚠️ 暂缓 |
 | src/backend/BIOSBackend.cpp | 193 | ⚠️ 简化 |
 | src/core/Compiler.cpp | 197 | ⚠️ 待集成 |
-| src/compat_stubs.cpp | 175 | ✅ 桩文件 |
+| src/compat_stubs.cpp | 235 | ✅ 桩文件 |
 
 ### 头文件 (20 个)
 
@@ -190,12 +218,11 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 ## 五、Git 提交记录
 
 ```
+bf1ef64 实现：P0 CBackend 62 操作码全覆盖 + P1 IR 管线 CLI 集成 (zcc ir 命令)
+8ce98d2 添加：当前开发状态报告
 1439e31 实现：完成 IR 生成器全部 12 个 TODO 方法
-f48bdfd (D:\ZCC\v0.2) 同上
-f0cdeee 修复：v0.2 构建错误修复
-e78f9f5 同上 (e:\ZCC\v0.2)
-4ed193a 清理：删除示例、测试、文档和构建脚本
-305f759 同上 (e:\ZCC\v0.2)
+e78f9f5 修复：v0.2 构建错误修复
+4ed193a 清理：删除示例、测试、文档和构建脚本 (v0.2)
 bdc6e9c 清理：彻底删除示例、测试、文档和构建产物 (v0.1)
 3d56b6a 清理：删除遗留文件和冗余代码 (v0.1)
 ```
