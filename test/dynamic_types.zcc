@@ -1,0 +1,65 @@
+// ============================================
+// ZCC 测试套件: 动态类型 & 变量
+// 测试运行时类型切换、类型推断、变量赋值
+// ============================================
+
+// 测试 1: 整数赋值与重赋值
+auto x = 42;
+auto y = x;
+auto z = y + x;
+// x=42, y=42, z=84
+
+// 测试 2: 变量类型运行时改变
+auto flex = 100;       // int
+flex = 3.14159;        // float
+flex = "Hello";         // string
+flex = true;            // bool
+flex = null;            // null
+// 所有赋值都应成功
+
+// 测试 3: 字符串拼接
+auto greeting = "Hello";
+auto target = "World";
+auto message = greeting + " " + target + "!";
+// 期望: "Hello World!"
+
+// 测试 4: 数字转字符串 (隐式)
+auto num = 42;
+auto text = "The answer is " + num;
+// 期望: "The answer is 42"
+
+// 测试 5: 字符串转数字 (运算时)
+auto str_num = "123";
+auto result = str_num + 456;
+// 期望: 579 (123 + 456) — 如果 str_num 当作数字
+
+// 测试 6: 布尔运算
+auto t = true;
+auto f = false;
+auto and_result = t && f;  // false
+auto or_result  = t || f;  // true
+auto not_result = !t;      // false
+
+// 测试 7: null 和 undefined
+auto nothing = null;
+auto undefined_val = undefined;
+// nothing == null → true
+
+// 测试 8: 科学计数法
+auto sci_a = 1.5e10;    // 15000000000
+auto sci_b = 2.5e-5;    // 0.000025
+auto sci_sum = sci_a + sci_b;
+// 期望: 15000000000.000025
+
+// 测试 9: NaN 和 Infinity
+auto nan_val = NaN;
+auto inf_val = Infinity;
+auto neg_inf = -Infinity;
+
+// 测试 10: 复合赋值
+auto counter = 0;
+counter += 10;
+counter -= 2;
+counter *= 3;
+counter /= 4;
+// counter = ((0+10)-2)*3/4 = 6

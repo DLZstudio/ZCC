@@ -1,0 +1,85 @@
+// ============================================
+// ZCC 测试套件: 极端与错误用例
+// 测试运行时错误、边界条件、异常情况
+// ============================================
+
+// 测试 1: 除零 (应报告运行时错误或返回 Infinity)
+auto div_zero = 100 / 0;
+// 期望: 运行时错误或 Infinity
+
+// 测试 2: 取模零
+auto mod_zero = 100 % 0;
+// 期望: 运行时错误
+
+// 测试 3: null 参与运算
+auto null_val = null;
+auto null_add = null_val + 10;
+// 期望: 10 (null 当作 0) 或其他合理行为
+
+// 测试 4: undefined 访问
+auto undef_val = undefined;
+auto undef_add = undef_val + 5;
+// 期望: NaN 或错误
+
+// 测试 5: 数组越界访问
+auto bounds_arr = [1, 2, 3];
+auto out_of_bounds = bounds_arr[10];
+// 期望: null 或 undefined
+
+// 测试 6: 负数索引
+auto neg_idx = bounds_arr[-1];
+// 期望: null 或最后一个元素
+
+// 测试 7: 空数组操作
+auto empty_arr = [];
+auto empty_first = empty_arr[0];
+auto empty_len = empty_arr.length;
+// 期望: null, 0
+
+// 测试 8: 对象访问不存在的属性
+auto obj = { a: 1, b: 2 };
+auto missing = obj.c;
+// 期望: null 或 undefined
+
+// 测试 9: 混合类型比较
+auto compare_mixed = ("5" == 5);
+auto compare_strict = ("5" === 5);
+// 期望: == 可能为 true (宽松), === 为 false
+
+// 测试 10: 循环中的大型运算
+auto large_sum = 0;
+for (auto i = 1; i <= 1000; i++) {
+    large_sum += i;
+}
+// 期望: large_sum = 500500
+
+// 测试 11: 深度递归 (栈测试)
+function deepRecur(n) {
+    if (n <= 0) { return 0; }
+    return 1 + deepRecur(n - 1);
+}
+auto depth_100 = deepRecur(100);
+// 期望: depth_100 = 100
+
+// 测试 12: 大数比较
+auto huge_a = 100000000000000000000000000000000000000000000000000;
+auto huge_b =  99999999999999999999999999999999999999999999999999;
+auto huge_cmp = huge_a > huge_b;
+// 期望: true
+
+// 测试 13: 空字符串
+auto empty_str = "";
+auto empty_len2 = empty_str.length;
+// 期望: 0
+
+// 测试 14: 巨长字符串
+auto long_str = "";
+for (auto i = 0; i < 100; i++) {
+    long_str += "ZCC";
+}
+// 期望: 300 字符
+
+// 测试 15: 同时使用多种类型
+auto mixed_arr = [1, "hello", true, null, [2, 3], { key: "val" }];
+auto mixed_len = mixed_arr.length;
+// 期望: mixed_len = 6

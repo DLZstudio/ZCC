@@ -1,0 +1,48 @@
+// ============================================
+// ZCC 测试套件: 语法错误用例
+// 故意写错，验证编译器能给出合理的错误信息
+// ============================================
+
+// 错误 1: 缺少分号
+// 期望: 语法错误 "expected ';'"
+auto missing_semi = 42
+
+// 错误 2: 未闭合的字符串
+// 期望: 词法错误 "unterminated string"
+auto bad_string = "unclosed string;
+
+// 错误 3: 未定义的变量
+// 期望: 语义错误 "undefined variable: bad_var"
+auto result = bad_var + 10;
+
+// 错误 4: 不匹配的括号
+// 期望: 语法错误
+auto unbalanced = (1 + 2 * ((3 - 4);
+
+// 错误 5: 函数调用缺少括号
+// 期望: 语法错误
+auto func_ref = someFunc;
+
+// 错误 6: 二元运算符缺少右操作数
+// 期望: 语法错误
+auto incomplete = 1 + ;
+
+// 错误 7: 非法的标识符 (数字开头)
+// 期望: 词法错误
+auto 123bad = 42;
+
+// 错误 8: 重复声明同名变量
+// 期望: 语义错误 "redeclared variable: x"
+auto x = 1;
+auto x = 2;
+
+// 错误 9: break 在循环外
+// 期望: 语义错误 "break outside loop"
+break;
+
+// 错误 10: return 后的死代码
+// 期望: 警告 "unreachable code"
+function deadCode() {
+    return 1;
+    auto after_return = 2;
+}

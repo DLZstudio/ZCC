@@ -1,0 +1,77 @@
+// ============================================
+// ZCC 测试套件: 函数
+// 测试函数定义、参数、返回、递归、闭包
+// ============================================
+
+// 测试 1: 简单函数
+function add(a, b) {
+    return a + b;
+}
+auto sum = add(3, 7);
+// 期望: sum = 10
+
+// 测试 2: 多参数函数
+function multiply(a, b, c) {
+    return a * b * c;
+}
+auto product = multiply(2, 3, 4);
+// 期望: product = 24
+
+// 测试 3: 无参数函数
+function getAnswer() {
+    return 42;
+}
+auto answer = getAnswer();
+// 期望: 42
+
+// 测试 4: 无返回值函数 (隐式返回 null)
+function noReturn() {
+    auto x = 1;
+}
+auto nothing = noReturn();
+// 期望: nothing = null 或 undefined
+
+// 测试 5: 递归 — 斐波那契
+function fib(n) {
+    if (n <= 1) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+auto fib_10 = fib(10);
+// 期望: fib_10 = 55
+
+// 测试 6: 递归 — 阶乘
+function factorial(n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+auto fact_7 = factorial(7);
+// 期望: fact_7 = 5040
+
+// 测试 7: 函数作为参数 (高阶函数)
+function apply(func, value) {
+    return func(value);
+}
+function double(x) {
+    return x * 2;
+}
+auto doubled = apply(double, 21);
+// 期望: doubled = 42
+
+// 测试 8: 函数表达式
+auto square = function(x) {
+    return x * x;
+};
+auto sq_9 = square(9);
+// 期望: sq_9 = 81
+
+// 测试 9: 箭头函数
+auto triple = (x) => x * 3;
+auto tripled = triple(11);
+// 期望: tripled = 33
+
+// 测试 10: 箭头函数块体
+auto greet = (name) => {
+    return "Hello " + name;
+};
+auto greeting = greet("ZCC");
+// 期望: "Hello ZCC"

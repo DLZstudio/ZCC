@@ -1,0 +1,72 @@
+// ============================================
+// ZCC 测试套件: 数组与对象
+// 测试数组/对象创建、访问、修改、嵌套
+// ============================================
+
+// 测试 1: 数组字面量
+auto arr = [1, 2, 3, 4, 5];
+auto first = arr[0];   // 1
+auto last  = arr[4];   // 5
+auto len   = arr.length;
+// 期望: len = 5
+
+// 测试 2: 数组修改
+auto mutable_arr = [10, 20, 30];
+mutable_arr[1] = 99;
+auto changed = mutable_arr[1];
+// 期望: changed = 99
+
+// 测试 3: 二维数组
+auto matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+auto center = matrix[1][1];
+// 期望: center = 5
+
+// 测试 4: 空数组
+auto empty_arr = [];
+auto empty_len = empty_arr.length;
+// 期望: empty_len = 0
+
+// 测试 5: 对象字面量
+auto person = {
+    name: "Alice",
+    age: 25,
+    active: true
+};
+auto person_name = person.name;
+auto person_age  = person.age;
+// 期望: "Alice", 25
+
+// 测试 6: 嵌套对象
+auto student = {
+    name: "Bob",
+    scores: {
+        math: 95,
+        english: 88,
+        science: 92
+    }
+};
+auto math_score = student.scores.math;
+// 期望: 95
+
+// 测试 7: 对象属性修改
+auto config = { debug: false, port: 8080 };
+config.debug = true;
+config.port = 3000;
+// 期望: debug = true, port = 3000
+
+// 测试 8: 数组中的对象
+auto people = [
+    { name: "Alice", age: 25 },
+    { name: "Bob",   age: 30 },
+    { name: "Carol", age: 28 }
+];
+auto bob_age = people[1].age;
+// 期望: 30
+
+// 测试 9: 对象中的数组
+auto classroom = {
+    name: "Class A",
+    students: ["Alice", "Bob", "Carol", "David"]
+};
+auto third = classroom.students[2];
+// 期望: "Carol"

@@ -1,0 +1,94 @@
+// ============================================
+// ZCC 测试套件: 控制流
+// 测试 if/else、for、while、break、continue
+// ============================================
+
+// 测试 1: if-else 分支
+auto score = 85;
+auto grade = "";
+if (score >= 90) {
+    grade = "A";
+} else if (score >= 80) {
+    grade = "B";
+} else if (score >= 70) {
+    grade = "C";
+} else {
+    grade = "F";
+}
+// 期望: grade = "B"
+
+// 测试 2: 三数求最大值 (嵌套 if)
+auto a = 10;
+auto b = 20;
+auto c = 30;
+auto max = 0;
+if (a > b) {
+    if (a > c) { max = a; }
+    else       { max = c; }
+} else {
+    if (b > c) { max = b; }
+    else       { max = c; }
+}
+// 期望: max = 30
+
+// 测试 3: for 循环求和 1+2+...+10
+auto for_sum = 0;
+for (auto i = 1; i <= 10; i++) {
+    for_sum += i;
+}
+// 期望: for_sum = 55
+
+// 测试 4: for 循环递减
+auto countdown = "";
+for (auto i = 5; i > 0; i--) {
+    countdown += i;
+}
+// 期望: "54321"
+
+// 测试 5: while 循环计算阶乘
+auto factorial = 1;
+auto n = 5;
+while (n > 1) {
+    factorial *= n;
+    n--;
+}
+// 期望: factorial = 120
+
+// 测试 6: break 提前退出
+auto found = false;
+auto target_val = 7;
+for (auto i = 1; i <= 20; i++) {
+    if (i == target_val) {
+        found = true;
+        break;
+    }
+}
+// 期望: found = true
+
+// 测试 7: continue 跳过偶数
+auto odd_sum = 0;
+for (auto i = 1; i <= 10; i++) {
+    if (i % 2 == 0) { continue; }
+    odd_sum += i;
+}
+// 期望: odd_sum = 25
+
+// 测试 8: 嵌套循环
+auto matrix_sum = 0;
+for (auto i = 0; i < 3; i++) {
+    for (auto j = 0; j < 3; j++) {
+        matrix_sum += i + j;
+    }
+}
+// 期望: 27
+
+// 测试 9: 条件为 false 的 while (不进入循环体)
+auto never_run = 0;
+while (false) {
+    never_run = 1;
+}
+// 期望: never_run = 0
+
+// 测试 10: 三元运算符
+auto ternary_val = (5 > 3 ? "yes" : "no");
+// 期望: "yes"

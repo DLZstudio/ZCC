@@ -2,7 +2,7 @@
 
 > **日期**: 2026-05-31  
 > **工作仓库**: `e:\114514\语言\ZCC\v0.2\`  
-> **构建输出**: `zcc.exe` (6.6MB, MinGW GCC 13.1.0, C++20)
+> **构建输出**: `zcc.exe` (6.7MB, MinGW GCC 13.1.0, C++20)
 
 ---
 
@@ -10,15 +10,29 @@
 
 ```
 e:\114514\语言\ZCC\
-├── v0.1/          # 原 v0.1 仓库 (已清理，待移植)
+├── v0.1/          # 原 v0.1 仓库 (已清理，待移植 Module/IPC)
 │   ├── include/   # 前端头文件 + Module.hpp / IPC.hpp
 │   └── src/       # 前端源码 + Module.cpp / IPC.cpp
 │
 └── v0.2/          # 主力开发版本 ✅
     ├── include/   # 完整编译器头文件
     ├── src/       # 完整编译器源码
-    └── build/     # 构建产物 (zcc.exe)
+    ├── runtime/   # C 运行时库 (P0 完成)
+    │   ├── zcc_runtime.h  # 类型定义 + 全部函数声明
+    │   └── zcc_runtime.c  # BigNum/Array/Object/String/异常
+    ├── test/      # 测试用例
+    └── build/     # 构建产物 (zcc.exe + lib)
 ```
+
+---
+
+## ZCC 三大编译模式 (官方规格)
+
+| 模式 | 代号 | 链路 | 成熟度 | 优先级 |
+|------|------|------|--------|--------|
+| 模式一：源码转译 | `zcc transpile` | .zcc → IR → C → GCC → exe | 90% | P0 ← 当前 |
+| 模式二：通用 IR | `zcc ir` | .zcc → IR → .ir 文件 | 40% | P2 |
+| 模式三：直出可执行 | `zcc run` | 模式一的用户友好包装 | 70% | P1 |
 
 ---
 
@@ -135,9 +149,31 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 | ZCCType | isCompatibleWith/isSubtypeOf |
 | ZCCIRBlock | addSuccessor/addPredecessor/isTerminated |
 | ZCCIRFunction | createBlock |
-| ZCCIRModule | createFunction/createConstant |
+| ZCCIRModule | createFunction/createConstant/serialize/toText |
 | TargetPlatform | getCurrent/parse/各种 getter |
 | PlatformManager | getInstance/initialize |
+
+### 1.9 ZCC Runtime 运行时库 — ✅ (P0 完成)
+
+```
+runtime/zcc_runtime.h (160行) + runtime/zcc_runtime.c (730行)
+```
+
+完整实现了 CBackend 生成的 C 代码所需的所有运行时函数：
+
+| 模块 | 功能 | 测试 |
+|------|------|------|
+| BigNum | add/sub/mul/div/mod/cmp/pow/negate — 字符串高精度 | ✅ 20位×2=21位 |
+| ZCCValue | 8 种动态类型 + 自动类型提升 | ✅ 42+3.14=45.14 |
+| ZCCArray | new/get/set/len/push — 动态扩容 | ✅ 3 元素 |
+| ZCCObject | new/get/set/has — 64 桶哈希表 | ✅ 键值对 |
+| 字符串 | concat/slice | ✅ |
+| 算术 | add/sub/mul/div/mod/neg/pow — 全运算符 | ✅ |
+| 比较/逻辑 | eq/ne/lt/le/gt/ge/and/or/not | ✅ |
+| 异常 | zcc_throw — 打印并 abort | ✅ |
+| 打印 | print/println/print_str | ✅ |
+
+全部 5 大类功能通过集成测试验证。
 
 ### 1.7 IR 操作码 (ZCCIR.hpp)
 
@@ -173,20 +209,21 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 
 ## 三、待完成
 
-| 阶段 | 状态 | 预计工作量 |
-|------|------|-----------|
-| **优化器 (8 Pass 填逻辑)** | ❌ 框架就绪，全 TODO | 大 ← 下一步 |
-| NativeBackend 解释器 | ❌ 暂缓 (用 GCC/Clang 代替) | — |
-| main.cpp `run/exec` 子命令 | ❌ 全部桩 | 中 |
-| 换行符 lexer bug | ⚠️ | 小 |
-| 移植 v0.1 新语法 | ❌ 后置 | 中 |
-| 移植 v0.1 Module/IPC | ❌ 后置 | 中 |
+| 阶段 | 模式 | 状态 | 优先级 |
+|------|------|------|--------|
+| 统一 CLI 入口 (zcc run 走 IR→C→GCC) | 模式三 | ❌ | P1 ← 下一步 |
+| 编写完整测试用例 | — | ⚠️ 进行中 | — |
+| 优化器 (8 Pass 填逻辑) | 模式二 | ❌ 框架就绪 | P2 |
+| 换行符 lexer bug | — | ⚠️ | 低 |
+| 移植 v0.1 新语法 | — | ❌ | 后置 |
+| 移植 v0.1 Module/IPC | — | ❌ | 后置 |
+| NativeBackend 解释器 | 模式二 | ❌ 暂缓 | — |
 
 ---
 
 ## 四、文件清单
 
-### 源文件 (14 个)
+### 源文件 (14 + 2 runtime)
 
 | 文件 | 行数 | 状态 |
 |------|------|------|
@@ -218,11 +255,13 @@ AST → CodeGenerator → BytecodeModule → 序列化(.zbc) → ✅
 ## 五、Git 提交记录
 
 ```
-bf1ef64 实现：P0 CBackend 62 操作码全覆盖 + P1 IR 管线 CLI 集成 (zcc ir 命令)
+c543ac2 验证：zcc_runtime 全部功能测试通过
+4fa7230 添加：P0 zcc_runtime C 运行时库
+d80b64d 更新：开发进度文档 - 反映 P0/P1 完成
+bf1ef64 实现：P0 CBackend 62 操作码全覆盖 + P1 IR 管线 CLI 集成
 8ce98d2 添加：当前开发状态报告
 1439e31 实现：完成 IR 生成器全部 12 个 TODO 方法
 e78f9f5 修复：v0.2 构建错误修复
 4ed193a 清理：删除示例、测试、文档和构建脚本 (v0.2)
 bdc6e9c 清理：彻底删除示例、测试、文档和构建产物 (v0.1)
-3d56b6a 清理：删除遗留文件和冗余代码 (v0.1)
 ```
