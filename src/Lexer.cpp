@@ -409,7 +409,31 @@ std::optional<Token> Lexer::scanOperator() {
         case '[': return makeToken(TokenType::LEFT_BRACKET);
         case ']': return makeToken(TokenType::RIGHT_BRACKET);
         case ',': return makeToken(TokenType::COMMA);
-        case '.': return makeToken(TokenType::DOT);
+        case '.':
+            // 浮点数无前导零: .5 → NUMBER(0.5)
+            if (isDigit(peekChar())) {
+                size_t startLine = line_;
+                size_t startCol = column_;
+                // start_ 已被 scanToken 设为 current_ 的原始位置
+                // 但我们需要把 '.' 也算进 lexeme, 所以回退 start_
+                // 这里直接收集小数部分
+                while (isDigit(peekChar())) advance();
+                // 科学计数法: .5e10
+                if (peekChar() == 'e' || peekChar() == 'E') {
+                    advance();
+                    if (peekChar() == '+' || peekChar() == '-') advance();
+                    while (isDigit(peekChar())) advance();
+                }
+                std::string text = source_.substr(start_, current_ - start_);
+                try {
+                    double value = std::stod(text);
+                    return makeToken(TokenType::NUMBER, value);
+                } catch (const std::exception& e) {
+                    addError("Invalid number: " + text, startLine, startCol);
+                    return makeToken(TokenType::NUMBER, 0.0);
+                }
+            }
+            return makeToken(TokenType::DOT);
         case ';': return makeToken(TokenType::SEMICOLON);
         case ':': return makeToken(TokenType::COLON);
         case '?': return makeToken(TokenType::QUESTION);

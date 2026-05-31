@@ -528,7 +528,10 @@ StmtPtr Parser::parseStatement() {
 
     if (match(TokenType::FOR)) {
         if (match(TokenType::EACH)) {
-            return parseForEachStatement();
+            auto forEachStmt = parseForEachStatement();
+            // parseBlock() 内部会处理 { statements }
+            static_cast<ForEachStmt*>(forEachStmt.get())->body = parseBlock();
+            return forEachStmt;
         }
         return parseForStatement();
     }
@@ -619,6 +622,15 @@ StmtPtr Parser::parseIfStatement() {
 StmtPtr Parser::parseForStatement() {
     expect(TokenType::LEFT_PAREN, "Expected '(' after 'for'");
 
+    // for-each 语法: for (each x in arr) { ... }
+    if (match(TokenType::EACH)) {
+        auto forEachStmt = parseForEachStatement();
+        expect(TokenType::RIGHT_PAREN, "Expected ')' after for-each");
+        // parseBlock() 内部会处理 { statements }
+        static_cast<ForEachStmt*>(forEachStmt.get())->body = parseBlock();
+        return forEachStmt;
+    }
+
     StmtPtr initializer;
     if (match(TokenType::AUTO) || match(TokenType::CONST)) {
         bool isConst = previous().type == TokenType::CONST;
@@ -665,11 +677,8 @@ StmtPtr Parser::parseForEachStatement() {
 
     auto iterable = parseExpression();
 
-    expect(TokenType::LEFT_BRACE, "Expected '{' before for-each body");
-    auto body = parseBlock();
-    expect(TokenType::RIGHT_BRACE, "Expected '}' after for-each body");
-
-    return std::make_shared<ForEachStmt>(variable, iterable, body, getLocation(varToken));
+    // Body 由调用方处理: for (each x in arr) { body } 或 for each x in arr { body }
+    return std::make_shared<ForEachStmt>(variable, iterable, nullptr, getLocation(varToken));
 }
 
 StmtPtr Parser::parseWhileStatement() {
@@ -1071,8 +1080,8 @@ ExprPtr Parser::parsePrimary() {
             } while (match(TokenType::COMMA));
         }
         
-        if (!params.empty() && match(TokenType::RIGHT_PAREN) && match(TokenType::ARROW)) {
-            // 多参数箭头函数: (x, y) => body
+        if (match(TokenType::RIGHT_PAREN) && match(TokenType::ARROW)) {
+            // 箭头函数: (params) => body  或  () => body
             if (check(TokenType::LEFT_BRACE)) {
                 auto body = parseBlock();
                 return std::make_shared<ArrowFunctionExpr>(params, nullptr, body->statements, false,
@@ -1291,8 +1300,15 @@ ExprPtr Parser::parseObjectLiteral() {
                                                         SourceLocation(filename_, 0, 0, 0));
             prop.isMethod = true;
         } else {
-            Token nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
-            prop.key = nameToken.lexeme;
+            Token nameToken;
+            // 支持 IDENTIFIER 和 STRING 作为属性名
+            if (check(TokenType::STRING)) {
+                nameToken = advance();
+                prop.key = nameToken.getString();
+            } else {
+                nameToken = expect(TokenType::IDENTIFIER, "Expected property name");
+                prop.key = nameToken.lexeme;
+            }
             
             if (match(TokenType::COLON)) {
                 prop.value = parseExpression();
