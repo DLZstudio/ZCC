@@ -131,6 +131,7 @@ DeclPtr Parser::parseDeclaration() {
         // 导入声明
         if (match(TokenType::IMPORT)) {
             return parseImportDeclaration();
+        }
 
         // from 导入声明
         if (match(TokenType::FROM)) {
@@ -150,7 +151,6 @@ DeclPtr Parser::parseDeclaration() {
         // 命名空间声明
         if (match(TokenType::NAMESPACE)) {
             return parseNamespaceDeclaration();
-        }
         }
 
         // 导出声明
@@ -1322,6 +1322,82 @@ std::vector<ExprPtr> Parser::parseArguments() {
     }
     
     return arguments;
+}
+
+// ==================== 新增: from 导入声明 ====================
+
+DeclPtr Parser::parseFromImportDeclaration() {
+    std::string modulePath;
+    if (check(TokenType::STRING)) {
+        modulePath = advance().getString();
+    } else {
+        error(peek(), "Expected module path string");
+        return nullptr;
+    }
+    if (!match(TokenType::IMPORT)) {
+        error(peek(), "Expected 'import' after module path");
+        return nullptr;
+    }
+    std::vector<ImportDecl::ImportSpecifier> importSpecifiers;
+    do {
+        if (check(TokenType::IDENTIFIER)) {
+            std::string name = advance().lexeme;
+            importSpecifiers.push_back({name, name});
+        } else break;
+    } while (match(TokenType::COMMA));
+    expect(TokenType::SEMICOLON, "Expected ';' after from import declaration");
+    return std::make_shared<ImportDecl>(modulePath, "", importSpecifiers, "", SourceLocation("",0,0,0));
+}
+
+// ==================== 新增: @external 外部声明 ====================
+
+DeclPtr Parser::parseExternalDeclaration() {
+    DeclPtr declaration;
+    if (match(TokenType::FUNCTION) || match(TokenType::FUNC)) {
+        declaration = parseFunctionDeclaration();
+    } else if (match(TokenType::AUTO)) {
+        declaration = parseVariableDeclaration(false);
+    } else {
+        error(peek(), "Expected function or variable after @external");
+        return nullptr;
+    }
+    std::string name; std::vector<std::string> params;
+    if (auto fd = std::dynamic_pointer_cast<FunctionDecl>(declaration)) {
+        name = fd->name;
+        for (const auto& p : fd->parameters) params.push_back(p);
+    }
+    return std::make_shared<ExternalDecl>(name, params, "auto", SourceLocation("",0,0,0));
+}
+
+// ==================== 新增: enum 枚举声明 ====================
+
+DeclPtr Parser::parseEnumDeclaration() {
+    Token nameToken = expect(TokenType::IDENTIFIER, "Expected enum name");
+    std::vector<std::string> values;
+    if (match(TokenType::LEFT_BRACE)) {
+        do {
+            if (check(TokenType::IDENTIFIER)) values.push_back(advance().lexeme);
+            else break;
+        } while (match(TokenType::COMMA));
+        expect(TokenType::RIGHT_BRACE, "Expected '}' after enum body");
+    }
+    expect(TokenType::SEMICOLON, "Expected ';' after enum");
+    return std::make_shared<EnumDecl>(nameToken.lexeme, values, getLocation(nameToken));
+}
+
+// ==================== 新增: namespace 命名空间声明 ====================
+
+DeclPtr Parser::parseNamespaceDeclaration() {
+    Token nameToken = expect(TokenType::IDENTIFIER, "Expected namespace name");
+    std::vector<DeclPtr> members;
+    if (match(TokenType::LEFT_BRACE)) {
+        while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
+            auto decl = parseDeclaration();
+            if (decl) members.push_back(decl);
+        }
+        expect(TokenType::RIGHT_BRACE, "Expected '}' after namespace body");
+    }
+    return std::make_shared<NamespaceDecl>(nameToken.lexeme, members, getLocation(nameToken));
 }
 
 } // namespace zcc

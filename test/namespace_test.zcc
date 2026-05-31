@@ -1,0 +1,16 @@
+namespace Math {
+    auto pi = 3.14159;
+}
+namespace 工具 {
+    auto 版本 = 2;
+}
+namespace Calc {
+    function add(a, b) {
+        return a + b;
+    }
+}
+namespace Outer {
+    namespace Inner {
+        auto value = 42;
+    }
+}

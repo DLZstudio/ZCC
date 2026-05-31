@@ -1,0 +1,4 @@
+enum Color { RED, GREEN, BLUE };
+enum 方向 { 东, 南, 西, 北 };
+enum Status { OK };
+enum WeekDay { MON, TUE, WED, THU, FRI, SAT, SUN };
