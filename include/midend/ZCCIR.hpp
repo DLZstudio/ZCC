@@ -94,6 +94,9 @@ enum class ZCCIROpcode {
     OBJECT_GET, // 获取属性
     OBJECT_SET, // 设置属性
     
+    // 异常处理
+    THROW,      // 抛出异常
+    
     // 特殊操作
     INTRINSIC,  // 内部函数
     ASSEMBLY,   // 内联汇编
@@ -370,6 +373,8 @@ public:
     // 常量
     std::shared_ptr<ZCCIRConstant> createConstant(ZCCIRConstant::ConstantValue value, ZCCTypePtr type);
     const ConstantList& getConstants() const { return constants_; }
+    void addConstant(std::shared_ptr<ZCCIRConstant> c) { constants_.push_back(std::move(c)); }
+    ZCCIRValue::ID getNextValueID() { return nextValueID_++; }
 
     // 元数据
     ZCCIRMetadata& getMetadata() { return metadata_; }

@@ -105,6 +105,9 @@ private:
     // 错误处理
     void error(const SourceLocation& loc, const std::string& message);
     
+    // 当前表达式结果（用于 generateExpression 返回值）
+    ZCCIRValue::ID currentExprResult_ = 0;
+    
     // 成员
     IRGeneratorConfig config_;
     std::unique_ptr<ZCCIRModule> module_;
@@ -237,31 +240,63 @@ inline ZCCIRValue::ID IRGenerator::emitConstant(
     auto constant = std::make_shared<ZCCIRConstant>(
         std::move(value), type ? type : getAny(), nextValueID_++);
     
-    module_->constants_.push_back(constant);
+    module_->addConstant(constant);
     return constant->getID();
 }
 
 inline ZCCIRValue::ID IRGenerator::generateExpression(ExprPtr expr) {
     if (!expr) return 0;
-    expr->accept(*this);
-    // TODO: 返回生成的值 ID
-    return 0;
+    currentExprResult_ = 0;
+    
+    // Manual dispatch - AST nodes don't have accept()
+    if (auto* e = dynamic_cast<LiteralExpr*>(expr.get()))       visitLiteralExpr(e);
+    else if (auto* e = dynamic_cast<IdentifierExpr*>(expr.get())) visitIdentifierExpr(e);
+    else if (auto* e = dynamic_cast<BinaryExpr*>(expr.get()))    visitBinaryExpr(e);
+    else if (auto* e = dynamic_cast<UnaryExpr*>(expr.get()))     visitUnaryExpr(e);
+    else if (auto* e = dynamic_cast<AssignExpr*>(expr.get()))    visitAssignExpr(e);
+    else if (auto* e = dynamic_cast<CallExpr*>(expr.get()))      visitCallExpr(e);
+    else if (auto* e = dynamic_cast<MemberExpr*>(expr.get()))    visitMemberExpr(e);
+    else if (auto* e = dynamic_cast<IndexExpr*>(expr.get()))     visitIndexExpr(e);
+    else if (auto* e = dynamic_cast<ArrayExpr*>(expr.get()))     visitArrayExpr(e);
+    else if (auto* e = dynamic_cast<ObjectExpr*>(expr.get()))    visitObjectExpr(e);
+    else if (auto* e = dynamic_cast<FunctionExpr*>(expr.get()))  visitFunctionExpr(e);
+    else if (auto* e = dynamic_cast<ArrowFunctionExpr*>(expr.get())) visitArrowFunctionExpr(e);
+    else if (auto* e = dynamic_cast<TernaryExpr*>(expr.get()))   visitTernaryExpr(e);
+    
+    return currentExprResult_;
 }
 
 inline void IRGenerator::generateStatement(StmtPtr stmt) {
     if (!stmt) return;
-    stmt->accept(*this);
+    
+    if (auto* s = dynamic_cast<ExpressionStmt*>(stmt.get()))     visitExpressionStmt(s);
+    else if (auto* s = dynamic_cast<BlockStmt*>(stmt.get()))     visitBlockStmt(s);
+    else if (auto* s = dynamic_cast<IfStmt*>(stmt.get()))        visitIfStmt(s);
+    else if (auto* s = dynamic_cast<ForStmt*>(stmt.get()))       visitForStmt(s);
+    else if (auto* s = dynamic_cast<WhileStmt*>(stmt.get()))     visitWhileStmt(s);
+    else if (auto* s = dynamic_cast<ForEachStmt*>(stmt.get()))   visitForEachStmt(s);
+    else if (auto* s = dynamic_cast<ReturnStmt*>(stmt.get()))    visitReturnStmt(s);
+    else if (auto* s = dynamic_cast<BreakStmt*>(stmt.get()))     visitBreakStmt(s);
+    else if (auto* s = dynamic_cast<ContinueStmt*>(stmt.get()))  visitContinueStmt(s);
+    else if (auto* s = dynamic_cast<ThrowStmt*>(stmt.get()))     visitThrowStmt(s);
+    else if (auto* s = dynamic_cast<TryStmt*>(stmt.get()))       visitTryStmt(s);
+    else if (auto* s = dynamic_cast<SwitchStmt*>(stmt.get()))    visitSwitchStmt(s);
 }
 
 // AST 访问实现
 inline void IRGenerator::visitProgram(Program* program) {
     module_ = std::make_unique<ZCCIRModule>(config_.moduleName);
-    module_->metadata_.sourceFile = program->sourceFilename;
-    module_->metadata_.target = config_.target;
+    module_->getMetadata().sourceFile = program->sourceFilename;
+    module_->getMetadata().target = config_.target;
     
     // 首先处理所有声明
     for (auto& decl : program->declarations) {
-        decl->accept(*this);
+        if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get()))
+            visitFunctionDecl(fd);
+        else if (auto* vd = dynamic_cast<VariableDecl*>(decl.get()))
+            visitVariableDecl(vd);
+        else if (auto* cd = dynamic_cast<ClassDecl*>(decl.get()))
+            visitClassDecl(cd);
     }
 }
 
@@ -291,7 +326,8 @@ inline void IRGenerator::visitFunctionDecl(FunctionDecl* decl) {
     // 生成函数体
     if (decl->body) {
         currentBlock_ = func->createBlock("entry");
-        generateStatement(decl->body);
+        auto bodyStmt = std::make_shared<BlockStmt>(*decl->body);
+        generateStatement(bodyStmt);
         
         // 如果没有显式返回，添加隐式返回
         if (!currentBlock_->isTerminated()) {
@@ -581,66 +617,349 @@ inline void IRGenerator::visitCallExpr(CallExpr* expr) {
     emitInstruction(ZCCIROpcode::CALL, operands);
 }
 
-// 其他访问方法可以类似实现...
+// 类声明 - 生成类定义和构造函数的 IR
 inline void IRGenerator::visitClassDecl(ClassDecl* decl) {
-    // TODO: 实现类声明的 IR 生成
+    // 为类创建一个新的函数（构造函数）
+    auto* classFunc = module_->createFunction(decl->name + "_ctor", getVoid(), {});
+    functionCache_[decl->name] = classFunc;
+    
+    // 生成类的 IR 表示
+    ZCCIRValue::ID classObj = emitInstruction(ZCCIROpcode::OBJECT_NEW, {});
+    declareVariable(decl->name, classObj);
+    
+    // 处理父类
+    if (!decl->superClass.empty()) {
+        auto superIt = functionCache_.find(decl->superClass);
+        if (superIt != functionCache_.end()) {
+            emitInstruction(ZCCIROpcode::CALL, {});
+        }
+    }
+    
+    // 处理方法
+    for (auto& member : decl->members) {
+        if (auto* funcDecl = dynamic_cast<FunctionDecl*>(member.get())) {
+            visitFunctionDecl(funcDecl);
+        } else if (auto* varDecl = dynamic_cast<VariableDecl*>(member.get())) {
+            visitVariableDecl(varDecl);
+        }
+    }
 }
 
+// for-each 循环
 inline void IRGenerator::visitForEachStmt(ForEachStmt* stmt) {
-    // TODO: 实现 for-each 循环
+    // 生成可迭代对象
+    ZCCIRValue::ID iterable = generateExpression(stmt->iterable);
+    ZCCIRValue::ID length = emitInstruction(ZCCIROpcode::ARRAY_LEN, {iterable});
+    
+    // 创建块
+    auto* initBlock = currentFunction_->createBlock("foreach.init");
+    auto* condBlock = currentFunction_->createBlock("foreach.cond");
+    auto* bodyBlock = currentFunction_->createBlock("foreach.body");
+    auto* incrBlock = currentFunction_->createBlock("foreach.incr");
+    auto* endBlock = currentFunction_->createBlock("foreach.end");
+    
+    // 初始化索引
+    emitJump(initBlock);
+    currentBlock_ = initBlock;
+    ZCCIRValue::ID indexVar = nextValueID_++;
+    emitConstant(static_cast<int64_t>(0), getI64());
+    emitInstruction(ZCCIROpcode::STORE, {indexVar, 0UL});
+    emitJump(condBlock);
+    
+    // 条件检查
+    currentBlock_ = condBlock;
+    ZCCIRValue::ID idxLoaded = emitInstruction(ZCCIROpcode::LOAD, {indexVar});
+    ZCCIRValue::ID cond = emitInstruction(ZCCIROpcode::CMP_LT, {idxLoaded, length});
+    emitCondJump(cond, bodyBlock, endBlock);
+    
+    // 循环体
+    controlFlow_.loopStart = condBlock;
+    controlFlow_.loopEnd = endBlock;
+    currentBlock_ = bodyBlock;
+    
+    // 获取当前元素
+    ZCCIRValue::ID element = emitInstruction(ZCCIROpcode::ARRAY_GET, {iterable, idxLoaded});
+    declareVariable(stmt->variable, element);
+    
+    if (stmt->body) {
+        generateStatement(std::make_shared<BlockStmt>(*stmt->body));
+    }
+    
+    if (!currentBlock_->isTerminated()) {
+        emitJump(incrBlock);
+    }
+    
+    // 增量
+    currentBlock_ = incrBlock;
+    emitInstruction(ZCCIROpcode::INC, {indexVar});
+    emitJump(condBlock);
+    
+    currentBlock_ = endBlock;
+    controlFlow_.loopStart = nullptr;
+    controlFlow_.loopEnd = nullptr;
 }
 
+// throw 语句
 inline void IRGenerator::visitThrowStmt(ThrowStmt* stmt) {
-    // TODO: 实现异常
+    ZCCIRValue::ID exception = generateExpression(stmt->exception);
+    emitTerminator(ZCCIROpcode::THROW, {exception});
 }
 
+// try-catch-finally
 inline void IRGenerator::visitTryStmt(TryStmt* stmt) {
-    // TODO: 实现异常处理
+    auto* tryBlock = currentFunction_->createBlock("try.body");
+    auto* catchBlock = stmt->catchBlock ? currentFunction_->createBlock("try.catch") : nullptr;
+    auto* finallyBlock = stmt->finallyBlock ? currentFunction_->createBlock("try.finally") : nullptr;
+    auto* endBlock = currentFunction_->createBlock("try.end");
+    
+    // Try 块
+    emitJump(tryBlock);
+    currentBlock_ = tryBlock;
+    generateStatement(std::make_shared<BlockStmt>(*stmt->tryBlock));
+    if (!currentBlock_->isTerminated()) {
+        if (finallyBlock) emitJump(finallyBlock);
+        else emitJump(endBlock);
+    }
+    
+    // Catch 块
+    if (catchBlock && stmt->catchBlock) {
+        currentBlock_ = catchBlock;
+        if (!stmt->catchVariable.empty()) {
+            ZCCIRValue::ID exVar = nextValueID_++;
+            declareVariable(stmt->catchVariable, exVar);
+        }
+        generateStatement(std::make_shared<BlockStmt>(*stmt->catchBlock));
+        if (!currentBlock_->isTerminated()) {
+            if (finallyBlock) emitJump(finallyBlock);
+            else emitJump(endBlock);
+        }
+    }
+    
+    // Finally 块
+    if (finallyBlock && stmt->finallyBlock) {
+        currentBlock_ = finallyBlock;
+        generateStatement(std::make_shared<BlockStmt>(*stmt->finallyBlock));
+        if (!currentBlock_->isTerminated()) {
+            emitJump(endBlock);
+        }
+    }
+    
+    currentBlock_ = endBlock;
 }
 
+// switch-case
 inline void IRGenerator::visitSwitchStmt(SwitchStmt* stmt) {
-    // TODO: 实现 switch 语句
+    ZCCIRValue::ID discriminant = generateExpression(stmt->discriminant);
+    auto* endBlock = currentFunction_->createBlock("switch.end");
+    ZCCIRBlock* defaultBlock = endBlock;
+    
+    // 为每个 case 创建块并收集
+    std::vector<ZCCIRBlock*> caseBlocks;
+    std::vector<ZCCIRValue::ID> caseValues;
+    for (size_t i = 0; i < stmt->cases.size(); ++i) {
+        auto& cs = stmt->cases[i];
+        if (cs.isDefault) {
+            defaultBlock = currentFunction_->createBlock("switch.default");
+            caseBlocks.push_back(defaultBlock);
+            caseValues.push_back(0);
+        } else {
+            auto* block = currentFunction_->createBlock("switch.case" + std::to_string(i));
+            caseBlocks.push_back(block);
+            caseValues.push_back(generateExpression(cs.value));
+        }
+    }
+    
+    // 发射比较和条件跳转
+    for (size_t i = 0; i < stmt->cases.size(); ++i) {
+        if (stmt->cases[i].isDefault) continue;
+        
+        ZCCIRValue::ID eq = emitInstruction(ZCCIROpcode::CMP_EQ, {discriminant, caseValues[i]});
+        auto* nextBlock = (i + 1 < stmt->cases.size()) ? 
+            currentFunction_->createBlock("switch.test" + std::to_string(i + 1)) : 
+            defaultBlock;
+        emitCondJump(eq, caseBlocks[i], nextBlock);
+        currentBlock_ = nextBlock;
+    }
+    
+    if (defaultBlock != endBlock) {
+        emitJump(defaultBlock);
+    }
+    
+    // 生成 case 体
+    for (size_t i = 0; i < stmt->cases.size(); ++i) {
+        currentBlock_ = caseBlocks[i];
+        for (auto& s : stmt->cases[i].statements) {
+            generateStatement(s);
+        }
+        if (!currentBlock_->isTerminated()) {
+            emitJump(endBlock);
+        }
+    }
+    
+    currentBlock_ = endBlock;
 }
 
+// 成员访问 obj.prop
 inline void IRGenerator::visitMemberExpr(MemberExpr* expr) {
-    // TODO: 实现成员访问
+    ZCCIRValue::ID obj = generateExpression(expr->object);
+    ZCCIRValue::ID propKey = emitConstant(expr->property, getString());
+    emitInstruction(ZCCIROpcode::OBJECT_GET, {obj, propKey});
 }
 
+// 索引访问 obj[index]
 inline void IRGenerator::visitIndexExpr(IndexExpr* expr) {
-    // TODO: 实现索引访问
+    ZCCIRValue::ID obj = generateExpression(expr->object);
+    ZCCIRValue::ID idx = generateExpression(expr->index);
+    emitInstruction(ZCCIROpcode::ARRAY_GET, {obj, idx});
 }
 
+// 数组字面量 [elem1, elem2, ...]
 inline void IRGenerator::visitArrayExpr(ArrayExpr* expr) {
-    // TODO: 实现数组字面量
+    std::vector<ZCCIRValue::ID> elements;
+    for (auto& elem : expr->elements) {
+        elements.push_back(generateExpression(elem));
+    }
+    
+    // 创建数组
+    ZCCIRValue::ID arr = emitInstruction(ZCCIROpcode::ARRAY_NEW, {});
+    for (size_t i = 0; i < elements.size(); ++i) {
+        ZCCIRValue::ID idx = emitConstant(static_cast<int64_t>(i), getI64());
+        emitInstruction(ZCCIROpcode::ARRAY_SET, {arr, idx, elements[i]});
+    }
 }
 
+// 对象字面量 { key: value, ... }
 inline void IRGenerator::visitObjectExpr(ObjectExpr* expr) {
-    // TODO: 实现对象字面量
+    ZCCIRValue::ID obj = emitInstruction(ZCCIROpcode::OBJECT_NEW, {});
+    
+    for (auto& prop : expr->properties) {
+        ZCCIRValue::ID key = emitConstant(prop.key, getString());
+        ZCCIRValue::ID value = generateExpression(prop.value);
+        emitInstruction(ZCCIROpcode::OBJECT_SET, {obj, key, value});
+    }
 }
 
+// 函数表达式 function name(params) { body }
 inline void IRGenerator::visitFunctionExpr(FunctionExpr* expr) {
-    // TODO: 实现函数字面量
+    // 创建内部函数
+    std::vector<std::pair<std::string, ZCCTypePtr>> params;
+    for (const auto& p : expr->parameters) {
+        params.push_back({p, getAny()});
+    }
+    
+    auto* innerFunc = module_->createFunction(
+        expr->name.empty() ? "__lambda" : expr->name, getAny(), std::move(params));
+    
+    functionCache_[expr->name.empty() ? "__lambda" : expr->name] = innerFunc;
+    
+    // 保存当前函数上下文
+    auto* savedFunc = currentFunction_;
+    auto* savedBlock = currentBlock_;
+    
+    currentFunction_ = innerFunc;
+    enterScope(true);
+    
+    // 声明参数
+    for (size_t i = 0; i < expr->parameters.size(); ++i) {
+        declareVariable(expr->parameters[i], i);
+    }
+    
+    // 生成函数体
+    currentBlock_ = innerFunc->createBlock("entry");
+    for (auto& stmt : expr->body) {
+        generateStatement(stmt);
+    }
+    if (!currentBlock_->isTerminated()) {
+        emitTerminator(ZCCIROpcode::RET, {});
+    }
+    
+    leaveScope();
+    
+    // 恢复上下文
+    currentFunction_ = savedFunc;
+    currentBlock_ = savedBlock;
 }
 
+// 箭头函数 (params) => expr 或 (params) => { body }
 inline void IRGenerator::visitArrowFunctionExpr(ArrowFunctionExpr* expr) {
-    // TODO: 实现箭头函数
+    // 创建内部函数
+    std::vector<std::pair<std::string, ZCCTypePtr>> params;
+    for (const auto& p : expr->parameters) {
+        params.push_back({p, getAny()});
+    }
+    
+    auto* innerFunc = module_->createFunction(
+        "__arrow", getAny(), std::move(params));
+    
+    // 保存上下文
+    auto* savedFunc = currentFunction_;
+    auto* savedBlock = currentBlock_;
+    
+    currentFunction_ = innerFunc;
+    enterScope(true);
+    
+    for (size_t i = 0; i < expr->parameters.size(); ++i) {
+        declareVariable(expr->parameters[i], i);
+    }
+    
+    currentBlock_ = innerFunc->createBlock("entry");
+    
+    if (expr->expressionBody) {
+        // 表达式体: (x) => x + 1
+        ZCCIRValue::ID result = generateExpression(expr->expressionBody);
+        emitTerminator(ZCCIROpcode::RET, {result});
+    } else {
+        // 块体: (x) => { return x + 1; }
+        for (auto& stmt : expr->blockBody) {
+            generateStatement(stmt);
+        }
+        if (!currentBlock_->isTerminated()) {
+            emitTerminator(ZCCIROpcode::RET, {});
+        }
+    }
+    
+    leaveScope();
+    
+    currentFunction_ = savedFunc;
+    currentBlock_ = savedBlock;
 }
 
+// 三元运算符 condition ? then : else
 inline void IRGenerator::visitTernaryExpr(TernaryExpr* expr) {
-    // TODO: 实现三元运算符
+    ZCCIRValue::ID condition = generateExpression(expr->condition);
+    
+    auto* thenBlock = currentFunction_->createBlock("ternary.then");
+    auto* elseBlock = currentFunction_->createBlock("ternary.else");
+    auto* endBlock = currentFunction_->createBlock("ternary.end");
+    
+    emitCondJump(condition, thenBlock, elseBlock);
+    
+    // Then 分支
+    ZCCIRValue::ID thenVal = 0;
+    currentBlock_ = thenBlock;
+    thenVal = generateExpression(expr->thenBranch);
+    if (!currentBlock_->isTerminated()) emitJump(endBlock);
+    
+    // Else 分支
+    ZCCIRValue::ID elseVal = 0;
+    currentBlock_ = elseBlock;
+    elseVal = generateExpression(expr->elseBranch);
+    if (!currentBlock_->isTerminated()) emitJump(endBlock);
+    
+    currentBlock_ = endBlock;
+    // Phi 节点合并两个分支的值
+    ZCCIRValue::ID phiVal = emitInstruction(ZCCIROpcode::PHI, {thenVal, elseVal});
 }
 
 inline void IRGenerator::visitIdentifierExpr(IdentifierExpr* expr) {
     ZCCIRValue::ID varID = lookupVariable(expr->name);
     if (varID == 0) {
         // 可能是全局变量或函数
-        // TODO: 查找全局符号
         error(expr->location, "Undefined variable: " + expr->name);
         return;
     }
     
-    // TODO: 加载变量值
-    emitInstruction(ZCCIROpcode::LOAD, {varID});
+    currentExprResult_ = emitInstruction(ZCCIROpcode::LOAD, {varID});
 }
 
 } // namespace zcc
