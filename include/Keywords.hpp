@@ -58,6 +58,9 @@ namespace CNKeywords {
     inline const std::string 等待所有 = "等待所有";
     inline const std::string 关闭 = "关闭";
     inline const std::string 切换 = "切换";
+    inline const std::string 打印 = "打印";
+    inline const std::string 打印行 = "打印行";
+    inline const std::string 输入 = "输入";
     inline const std::string 情况 = "情况";
     inline const std::string 枚举 = "枚举";
     inline const std::string 命名空间 = "命名空间";
@@ -113,6 +116,9 @@ namespace ENKeywords {
     inline const std::string waitAll = "waitAll";
     inline const std::string close = "close";
     inline const std::string switch_ = "switch";
+    inline const std::string print = "print";
+    inline const std::string println = "println";
+    inline const std::string input = "input";
     inline const std::string case_ = "case";
     inline const std::string enum_ = "enum";
     inline const std::string namespace_ = "namespace";
@@ -143,6 +149,7 @@ public:
         // 线程
         THREAD, START, SLEEP, WAIT_ALL, CLOSE,
         // 其他
+        PRINT, PRINTLN, INPUT,
         SWITCH, CASE,
         FUNC,
         ENUM, NAMESPACE,
@@ -204,6 +211,9 @@ public:
         keywordMap_[CNKeywords::等待所有] = KeywordType::WAIT_ALL;
         keywordMap_[CNKeywords::关闭] = KeywordType::CLOSE;
         keywordMap_[CNKeywords::切换] = KeywordType::SWITCH;
+        keywordMap_[CNKeywords::打印] = KeywordType::PRINT;
+        keywordMap_[CNKeywords::打印行] = KeywordType::PRINTLN;
+        keywordMap_[CNKeywords::输入] = KeywordType::INPUT;
         keywordMap_[CNKeywords::情况] = KeywordType::CASE;
         keywordMap_[CNKeywords::枚举] = KeywordType::ENUM;
         keywordMap_[CNKeywords::命名空间] = KeywordType::NAMESPACE;
@@ -257,6 +267,9 @@ public:
         keywordMap_[ENKeywords::waitAll] = KeywordType::WAIT_ALL;
         keywordMap_[ENKeywords::close] = KeywordType::CLOSE;
         keywordMap_[ENKeywords::switch_] = KeywordType::SWITCH;
+        keywordMap_[ENKeywords::print] = KeywordType::PRINT;
+        keywordMap_[ENKeywords::println] = KeywordType::PRINTLN;
+        keywordMap_[ENKeywords::input] = KeywordType::INPUT;
         keywordMap_[ENKeywords::case_] = KeywordType::CASE;
         keywordMap_[ENKeywords::enum_] = KeywordType::ENUM;
         keywordMap_[ENKeywords::namespace_] = KeywordType::NAMESPACE;

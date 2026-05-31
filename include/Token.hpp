@@ -37,6 +37,7 @@ enum class TokenType {
     THREAD, START, SLEEP, WAIT_ALL, CLOSE,
     SWITCH, CASE,
     ENUM, NAMESPACE,
+
     FUNC,
     
     // 运算符
@@ -249,6 +250,9 @@ private:
             case TokenType::CLOSE: return "CLOSE";
             case TokenType::SWITCH: return "SWITCH";
             case TokenType::CASE: return "CASE";
+            
+
+
             case TokenType::ENUM: return "ENUM";
             case TokenType::NAMESPACE: return "NAMESPACE";
             case TokenType::FUNC: return "FUNC";

@@ -111,9 +111,6 @@ private:
     // 当前表达式结果（用于 generateExpression 返回值）
     ZCCIRValue::ID currentExprResult_ = 0;
     
-    // 值表: ID → ZCCIRValue (共享指针，用于操作数引用)
-    std::unordered_map<ZCCIRValue::ID, std::shared_ptr<ZCCIRValue>> values_;
-    
     // 成员
     IRGeneratorConfig config_;
     std::unique_ptr<ZCCIRModule> module_;
@@ -193,23 +190,16 @@ inline ZCCIRValue::ID IRGenerator::emitInstruction(
     auto instr = std::make_unique<ZCCIRInstruction>(
         opcode, type ? type : getVoid(), nextInstructionID_++);
     
-    // 从 ID 查找真实的 ZCCIRValue 对象，创建操作数引用
+    // 添加操作数
     for (auto id : operands) {
-        auto it = values_.find(id);
-        if (it != values_.end()) {
-            instr->addOperand(ZCCIROperand(it->second));
-        } else {
-            instr->addOperand(ZCCIROperand()); // 未找到的回退
-        }
+        // TODO: 从值 ID 创建操作数
+        instr->addOperand(ZCCIROperand());
     }
     
-    // 创建结果值并注册
     ZCCIRValue::ID resultID = 0;
     if (type && type->getName() != "void") {
         resultID = nextValueID_++;
-        auto resultVal = std::make_shared<ZCCIRValue>(
-            ZCCIRValueKind::TEMPORARY, type, resultID);
-        values_[resultID] = resultVal;
+        // TODO: 创建临时值
     }
     
     currentBlock_->addInstruction(std::move(instr));
@@ -260,7 +250,6 @@ inline ZCCIRValue::ID IRGenerator::emitConstant(
         std::move(value), type ? type : getAny(), nextValueID_++);
     
     module_->addConstant(constant);
-    values_[constant->getID()] = constant;  // 注册到值表
     return constant->getID();
 }
 
@@ -1060,6 +1049,13 @@ inline void IRGenerator::visitIdentifierExpr(IdentifierExpr* expr) {
     // 内置常量
     if (expr->name == "NaN" || expr->name == "Infinity" || expr->name == "undefined") {
         currentExprResult_ = emitConstant(std::monostate{}, getAny());
+        return;
+    }
+    
+    // 内置 I/O (print/打印, input/输入) — 外部函数引用
+    if (expr->name == "print" || expr->name == "println" ||
+        expr->name == "input" || expr->name == "打印" || expr->name == "输入") {
+        currentExprResult_ = 0;
         return;
     }
     
