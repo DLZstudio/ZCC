@@ -131,6 +131,26 @@ DeclPtr Parser::parseDeclaration() {
         // 导入声明
         if (match(TokenType::IMPORT)) {
             return parseImportDeclaration();
+
+        // from 导入声明
+        if (match(TokenType::FROM)) {
+            return parseFromImportDeclaration();
+        }
+
+        // 外部声明
+        if (match(TokenType::AT_EXTERNAL)) {
+            return parseExternalDeclaration();
+        }
+
+        // 枚举声明
+        if (match(TokenType::ENUM)) {
+            return parseEnumDeclaration();
+        }
+
+        // 命名空间声明
+        if (match(TokenType::NAMESPACE)) {
+            return parseNamespaceDeclaration();
+        }
         }
 
         // 导出声明

@@ -36,6 +36,8 @@ enum class TokenType {
     ASYNC, AWAIT, PROMISE, RESOLVE, REJECT,
     THREAD, START, SLEEP, WAIT_ALL, CLOSE,
     SWITCH, CASE,
+    ENUM, NAMESPACE,
+    FUNC,
     
     // 运算符
     // 算术运算符
@@ -86,6 +88,7 @@ enum class TokenType {
     RIGHT_BRACE,    // }
     LEFT_BRACKET,   // [
     RIGHT_BRACKET,  // ]
+    AT_EXTERNAL,    // @external / @外部
     
     // 其他符号
     COMMA,          // ,
@@ -246,6 +249,9 @@ private:
             case TokenType::CLOSE: return "CLOSE";
             case TokenType::SWITCH: return "SWITCH";
             case TokenType::CASE: return "CASE";
+            case TokenType::ENUM: return "ENUM";
+            case TokenType::NAMESPACE: return "NAMESPACE";
+            case TokenType::FUNC: return "FUNC";
             
             // 运算符
             case TokenType::PLUS: return "PLUS";
@@ -287,6 +293,7 @@ private:
             case TokenType::RIGHT_BRACE: return "RIGHT_BRACE";
             case TokenType::LEFT_BRACKET: return "LEFT_BRACKET";
             case TokenType::RIGHT_BRACKET: return "RIGHT_BRACKET";
+            case TokenType::AT_EXTERNAL: return "AT_EXTERNAL";
             case TokenType::COMMA: return "COMMA";
             case TokenType::DOT: return "DOT";
             case TokenType::SEMICOLON: return "SEMICOLON";

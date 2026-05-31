@@ -268,6 +268,9 @@ std::optional<Token> Lexer::scanIdentifier() {
             case KeywordMap::KeywordType::CLOSE: tokenType = TokenType::CLOSE; break;
             case KeywordMap::KeywordType::SWITCH: tokenType = TokenType::SWITCH; break;
             case KeywordMap::KeywordType::CASE: tokenType = TokenType::CASE; break;
+            case KeywordMap::KeywordType::FUNC: tokenType = TokenType::FUNC; break;
+            case KeywordMap::KeywordType::ENUM: tokenType = TokenType::ENUM; break;
+            case KeywordMap::KeywordType::NAMESPACE: tokenType = TokenType::NAMESPACE; break;
             default: tokenType = TokenType::IDENTIFIER; break;
         }
         
@@ -385,6 +388,17 @@ std::optional<Token> Lexer::scanOperator() {
     size_t startCol = column_;
     
     char c = advance();
+    if (c == '@') {
+        if (isIdentifierStart(peekChar())) {
+            size_t savedCurrent = current_;
+            start_ = current_;
+            while (!isAtEndInternal() && isIdentifierChar(peekChar())) advance();
+            std::string text = source_.substr(start_, current_ - start_);
+            if (text == "external" || text == "外部") return makeToken(TokenType::AT_EXTERNAL);
+            current_ = savedCurrent;
+        }
+        return errorToken("Unexpected character: @");
+    }
     
     // 单字符运算符
     switch (c) {

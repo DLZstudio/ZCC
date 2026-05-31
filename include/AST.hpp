@@ -748,6 +748,37 @@ struct ExportDecl : Declaration {
     }
 };
 
+// 虚空接口声明 (@external / @外部)
+struct ExternalDecl : Declaration {
+    std::string name;
+    std::vector<std::string> parameters;
+    std::string returnType;
+    ExternalDecl(std::string n, std::vector<std::string> p, std::string r, const SourceLocation& l)
+        : name(std::move(n)), parameters(std::move(p)), returnType(std::move(r)) { location = l; }
+    StmtPtr cloneImpl() const override { return std::make_shared<ExternalDecl>(*this); }
+    std::string toString() const override { return "@external " + name; }
+};
+
+// 命名空间声明
+struct NamespaceDecl : Declaration {
+    std::string name;
+    std::vector<DeclPtr> members;
+    NamespaceDecl(std::string n, std::vector<DeclPtr> m, const SourceLocation& l)
+        : name(std::move(n)), members(std::move(m)) { location = l; }
+    StmtPtr cloneImpl() const override { return std::make_shared<NamespaceDecl>(*this); }
+    std::string toString() const override { return "namespace " + name; }
+};
+
+// 枚举声明
+struct EnumDecl : Declaration {
+    std::string name;
+    std::vector<std::string> values;
+    EnumDecl(std::string n, std::vector<std::string> v, const SourceLocation& l)
+        : name(std::move(n)), values(std::move(v)) { location = l; }
+    StmtPtr cloneImpl() const override { return std::make_shared<EnumDecl>(*this); }
+    std::string toString() const override { return "enum " + name; }
+};
+
 // ==================== 程序 ====================
 
 // 程序根节点

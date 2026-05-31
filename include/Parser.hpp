@@ -95,6 +95,12 @@ private:
     ExprPtr parseObjectLiteral();
     std::vector<ExprPtr> parseArguments();
     
+    // 新增：导入语法解析
+    DeclPtr parseFromImportDeclaration();  // from "module" import ...
+    DeclPtr parseExternalDeclaration();    // @external 声明
+    DeclPtr parseEnumDeclaration();        // enum 声明
+    DeclPtr parseNamespaceDeclaration();   // namespace 声明
+    
     // 源位置辅助
     SourceLocation getLocation(const Token& token) const;
     SourceLocation getCurrentLocation() const;

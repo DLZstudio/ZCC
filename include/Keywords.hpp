@@ -59,6 +59,8 @@ namespace CNKeywords {
     inline const std::string 关闭 = "关闭";
     inline const std::string 切换 = "切换";
     inline const std::string 情况 = "情况";
+    inline const std::string 枚举 = "枚举";
+    inline const std::string 命名空间 = "命名空间";
 }
 
 // 英文关键词
@@ -112,6 +114,8 @@ namespace ENKeywords {
     inline const std::string close = "close";
     inline const std::string switch_ = "switch";
     inline const std::string case_ = "case";
+    inline const std::string enum_ = "enum";
+    inline const std::string namespace_ = "namespace";
 }
 
 // 关键词映射
@@ -140,6 +144,8 @@ public:
         THREAD, START, SLEEP, WAIT_ALL, CLOSE,
         // 其他
         SWITCH, CASE,
+        FUNC,
+        ENUM, NAMESPACE,
         // 不是关键词
         NOT_KEYWORD
     };
@@ -199,6 +205,8 @@ public:
         keywordMap_[CNKeywords::关闭] = KeywordType::CLOSE;
         keywordMap_[CNKeywords::切换] = KeywordType::SWITCH;
         keywordMap_[CNKeywords::情况] = KeywordType::CASE;
+        keywordMap_[CNKeywords::枚举] = KeywordType::ENUM;
+        keywordMap_[CNKeywords::命名空间] = KeywordType::NAMESPACE;
 
         // 英文关键词
         keywordMap_[ENKeywords::auto_] = KeywordType::AUTO;
@@ -250,6 +258,8 @@ public:
         keywordMap_[ENKeywords::close] = KeywordType::CLOSE;
         keywordMap_[ENKeywords::switch_] = KeywordType::SWITCH;
         keywordMap_[ENKeywords::case_] = KeywordType::CASE;
+        keywordMap_[ENKeywords::enum_] = KeywordType::ENUM;
+        keywordMap_[ENKeywords::namespace_] = KeywordType::NAMESPACE;
     }
 
     KeywordType lookup(const std::string& identifier) const {
