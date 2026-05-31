@@ -148,6 +148,37 @@ private:
     std::vector<uint8_t> output_;
 };
 
+// ==================== C 后端 ====================
+
+class CBackend : public Backend {
+public:
+    CBackend() = default;
+    
+    bool initialize() override { return true; }
+    
+    CompileResult compile(const ZCCIRModule& module,
+                         const CompileOptions& options) override;
+    
+    std::string getName() const override { return "c"; }
+    bool isSupported() const override { return true; }
+    std::string getFileExtension() const override { return ".c"; }
+    std::string getDescription() const override { return "C Source Code"; }
+    
+private:
+    std::string generateCCode(const ZCCIRModule& module);
+    std::string generateFunction(const ZCCIRFunction& func);
+    std::string generateBlock(const ZCCIRBlock& block);
+    std::string generateInstruction(const ZCCIRInstruction& instr);
+    std::string generateGlobal(const ZCCIRGlobal& global);
+    std::string generateExpression(const ZCCIROperand& operand);
+    std::string convertType(const ZCCType& type);
+    std::string indent(int level);
+    std::string escapeString(const std::string& str);
+    
+    std::string output_;
+    int indentLevel_ = 0;
+};
+
 // ==================== 第三方后端注册接口 ====================
 
 // 第三方后端注册函数类型

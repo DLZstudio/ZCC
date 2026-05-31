@@ -56,8 +56,6 @@ void listBackends() {
     
     // 注册所有后端
     manager.registerBackend(std::make_unique<NativeBackend>());
-    manager.registerBackend(std::make_unique<WindowsBackend>());
-    manager.registerBackend(std::make_unique<LinuxBackend>());
     manager.registerBackend(std::make_unique<BIOSBackend>());
     manager.registerBackend(std::make_unique<CBackend>());
     
@@ -145,7 +143,7 @@ int compileCommand(int argc, char* argv[], int argIndex) {
     // 创建编译器
     CompilerOptions options;
     options.outputFilename = outputFile;
-    options.optimizationLevel = static_cast<int>(optLevel);
+    options.optimization = optLevel;
     options.debugInfo = debugInfo;
     options.useCache = useCache;
     options.backend = backendName;
@@ -156,7 +154,10 @@ int compileCommand(int argc, char* argv[], int argIndex) {
     if (!result.success) {
         std::cerr << "\nCompilation failed!\n";
         for (const auto& error : result.errors) {
-            std::cerr << error.toString() << "\n";
+            std::cerr << "  " << error << "\n";
+        }
+        for (const auto& diag : result.diagnostics) {
+            std::cerr << "  " << diag.message << " (line " << diag.location.line << ")\n";
         }
         return 1;
     }
@@ -201,7 +202,7 @@ int runCommand(int argc, char* argv[], int argIndex) {
     // 编译
     CompilerOptions options;
     options.outputFilename = tempOutput;
-    options.optimizationLevel = 1;
+    options.optimization = OptimizationLevel::O1;
     options.backend = "native";
     options.useCache = false;
     
@@ -211,7 +212,7 @@ int runCommand(int argc, char* argv[], int argIndex) {
     if (!compileResult.success) {
         std::cerr << "\nCompilation failed!\n";
         for (const auto& error : compileResult.errors) {
-            std::cerr << error.toString() << "\n";
+            std::cerr << error << "\n";
         }
         return 1;
     }

@@ -64,21 +64,6 @@ RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstructi
         case ZCCIROpcode::NOP:
             return RuntimeValue();
             
-        case ZCCIROpcode::LOAD_CONST: {
-            // TODO: 从常量池加载
-            return RuntimeValue();
-        }
-            
-        case ZCCIROpcode::STORE_LOCAL: {
-            // TODO: 存储到局部变量
-            return RuntimeValue();
-        }
-            
-        case ZCCIROpcode::LOAD_LOCAL: {
-            // TODO: 从局部变量加载
-            return RuntimeValue();
-        }
-            
         case ZCCIROpcode::ADD: {
             // TODO: 实现加法
             return RuntimeValue();
@@ -99,7 +84,7 @@ RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstructi
             return RuntimeValue();
         }
             
-        case ZCCIROpcode::POWER: {
+        case ZCCIROpcode::POW: {
             // TODO: 实现幂运算
             return RuntimeValue();
         }
@@ -196,7 +181,7 @@ std::vector<uint8_t> NativeBackend::generateExecutable(const ZCCIRModule& module
     return executable;
 }
 
-bool NativeBackend::saveIRToFile(const ZCCIRModule& module, const std::string& path) {
+bool NativeBackend::saveIRFile(const ZCCIRModule& module, const std::string& path) {
     std::ofstream file(path);
     if (!file) return false;
     
@@ -220,7 +205,7 @@ bool NativeBackend::saveIRToFile(const ZCCIRModule& module, const std::string& p
         if (func->isExternal()) continue;
         
         file << ".func ";
-        file << func->getReturnType().toString() << " @" << func->getName() << "(";
+        file << func->getReturnType()->toString() << " @" << func->getName() << "(";
         
         const auto& args = func->getArguments();
         for (size_t i = 0; i < args.size(); ++i) {
@@ -262,7 +247,7 @@ RuntimeValue NativeBackend::runModule(const ZCCIRModule& module) {
 
 bool saveIRToFile(const ZCCIRModule& module, const std::string& filename) {
     NativeBackend backend;
-    return backend.saveIRToFile(module, filename);
+    return backend.saveIRFile(module, filename);
 }
 
 std::unique_ptr<ZCCIRModule> loadIRFromFile(const std::string& filename) {

@@ -132,7 +132,7 @@ bool PeepholeOptimizationPass::run(ZCCIRModule& module) {
     bool modified = false;
     
     for (auto& func : module.getFunctions()) {
-        for (auto& block : func.getBlocks()) {
+        for (auto& block : func->getBlocks()) {
             modified |= optimizeBlock(*block);
         }
     }

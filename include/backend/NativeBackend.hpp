@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <stack>
 #include <cmath>
+#include <iostream>
 
 namespace zcc {
 
@@ -136,7 +137,7 @@ public:
         });
         
         registerBuiltin("len", [](const std::vector<RuntimeValue>& args) -> RuntimeValue {
-            if (args.empty()) return RuntimeValue(0);
+            if (args.empty()) return RuntimeValue(int64_t(0));
             const auto& val = args[0];
             if (val.isString()) {
                 return RuntimeValue(static_cast<int64_t>(val.get<std::string>().size()));
@@ -144,7 +145,7 @@ public:
             if (val.isArray()) {
                 return RuntimeValue(static_cast<int64_t>(val.get<std::vector<RuntimeValue>>().size()));
             }
-            return RuntimeValue(0);
+            return RuntimeValue(int64_t(0));
         });
         
         registerBuiltin("str", [](const std::vector<RuntimeValue>& args) -> RuntimeValue {
@@ -289,6 +290,9 @@ public:
     // 运行 IR 模块
     static RuntimeValue runModule(const ZCCIRModule& module);
     
+    // 保存 IR 文件
+    bool saveIRFile(const ZCCIRModule& module, const std::string& path);
+    
 private:
     // 解释执行
     class Interpreter {
@@ -309,9 +313,6 @@ private:
     // 生成自包含的可执行文件（包含解释器和字节码）
     std::vector<uint8_t> generateExecutable(const ZCCIRModule& module,
                                            const CompileOptions& options);
-    
-    // 保存 IR 文件
-    bool saveIRFile(const ZCCIRModule& module, const std::string& path);
 };
 
 // ==================== IR 文件保存/加载 ====================

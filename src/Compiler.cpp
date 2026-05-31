@@ -1,4 +1,6 @@
 #include "Compiler.hpp"
+#include "Bytecode.hpp"
+#include "CodeGenerator.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -9,8 +11,8 @@ Compiler::Compiler() {}
 
 Compiler::Compiler(CompilerOptions options) : options_(std::move(options)) {}
 
-CompileResult Compiler::compile(const std::string& sourceCode, const std::string& filename) {
-    CompileResult result;
+CompilerCompileResult Compiler::compile(const std::string& sourceCode, const std::string& filename) {
+    CompilerCompileResult result;
     result.success = true;
     diagnostics_.clear();
     
@@ -46,7 +48,7 @@ CompileResult Compiler::compile(const std::string& sourceCode, const std::string
     
     // 阶段 3: 代码生成
     CodeGenerator codeGen;
-    result.bytecode = codeGen.generate(program);
+    BytecodeModule bytecode = codeGen.generate(program);
     
     // 收集代码生成错误
     for (const auto& diag : codeGen.getErrors()) {
@@ -60,15 +62,15 @@ CompileResult Compiler::compile(const std::string& sourceCode, const std::string
     }
     
     // 序列化字节码
-    result.binaryData = result.bytecode.serialize();
+    result.binary = bytecode.serialize();
     
     return result;
 }
 
-CompileResult Compiler::compileFile(const std::string& filename) {
+CompilerCompileResult Compiler::compileFile(const std::string& filename) {
     std::string sourceCode = readFile(filename);
     if (sourceCode.empty()) {
-        CompileResult result;
+        CompilerCompileResult result;
         result.success = false;
         result.diagnostics.push_back(Diagnostic::error(
             "Failed to read file: " + filename, 
@@ -76,34 +78,6 @@ CompileResult Compiler::compileFile(const std::string& filename) {
         return result;
     }
     return compile(sourceCode, filename);
-}
-
-bool Compiler::saveBytecode(const BytecodeModule& module, const std::string& filename) {
-    std::vector<uint8_t> data = module.serialize();
-    
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) {
-        return false;
-    }
-    
-    file.write(reinterpret_cast<const char*>(data.data()), data.size());
-    return file.good();
-}
-
-BytecodeModule Compiler::loadBytecode(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("Failed to open bytecode file: " + filename);
-    }
-    
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),
-                              std::istreambuf_iterator<char>());
-    
-    return BytecodeModule::deserialize(data);
-}
-
-std::string Compiler::disassemble(const BytecodeModule& module) {
-    return Disassembler::disassemble(module);
 }
 
 std::string Compiler::readFile(const std::string& filename) {

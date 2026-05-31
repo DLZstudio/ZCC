@@ -4,74 +4,6 @@
 
 namespace zcc {
 
-// ==================== 后端管理器 ====================
-
-BackendManager& BackendManager::getInstance() {
-    static BackendManager instance;
-    return instance;
-}
-
-void BackendManager::registerBackend(std::unique_ptr<Backend> backend) {
-    if (backend) {
-        backends_[backend->getName()] = std::move(backend);
-    }
-}
-
-Backend* BackendManager::getBackend(const std::string& name) {
-    auto it = backends_.find(name);
-    if (it != backends_.end()) {
-        return it->second.get();
-    }
-    return nullptr;
-}
-
-std::vector<std::string> BackendManager::getAvailableBackends() const {
-    std::vector<std::string> names;
-    for (const auto& [name, backend] : backends_) {
-        names.push_back(name);
-    }
-    return names;
-}
-
-Backend* BackendManager::selectBackendForTarget(const TargetPlatform& target) {
-    // 根据目标平台选择最佳后端
-    if (target.isWASM()) {
-        return getBackend("wasm");
-    } else if (target.isMC()) {
-        return getBackend("mc");
-    } else if (target.isBIOS()) {
-        return getBackend("bios");
-    } else if (target.isMicroPython()) {
-        return getBackend("micropython");
-    } else {
-        // 默认使用 C 后端
-        return getBackend("c");
-    }
-}
-
-CompileResult BackendManager::compile(const ZCCIRModule& module,
-                                      const std::string& backendName,
-                                      const CompileOptions& options) {
-    Backend* backend = getBackend(backendName);
-    if (!backend) {
-        CompileResult result;
-        result.success = false;
-        result.errorMessage = "Backend not found: " + backendName;
-        return result;
-    }
-    
-    return backend->compile(module, options);
-}
-
-std::vector<OptimizationLevel> Backend::getSupportedOptimizations() const {
-    return {
-        OptimizationLevel::O0,
-        OptimizationLevel::O1,
-        OptimizationLevel::O2,
-        OptimizationLevel::O3
-    };
-}
-
 // ==================== C 后端 ====================
 
 CompileResult CBackend::compile(const ZCCIRModule& module,
@@ -119,7 +51,7 @@ std::string CBackend::generateCCode(const ZCCIRModule& module) {
     // 生成函数声明
     for (const auto& func : module.getFunctions()) {
         if (func->isExternal()) {
-            ss << convertType(func->getReturnType()) << " " 
+            ss << convertType(*func->getReturnType()) << " " 
                << func->getName() << "(";
             
             const auto& args = func->getArguments();
@@ -147,7 +79,7 @@ std::string CBackend::generateFunction(const ZCCIRFunction& func) {
     std::ostringstream ss;
     
     // 函数签名
-    ss << convertType(func.getReturnType()) << " " << func.getName() << "(";
+    ss << convertType(*func.getReturnType()) << " " << func.getName() << "(";
     
     const auto& args = func.getArguments();
     for (size_t i = 0; i < args.size(); ++i) {
@@ -273,7 +205,7 @@ std::string CBackend::generateGlobal(const ZCCIRGlobal& global) {
         ss << "const ";
     }
     
-    ss << convertType(global.getType()) << " " << global.getName();
+    ss << convertType(*global.getType()) << " " << global.getName();
     
     if (global.getInitializer()) {
         ss << " = " << generateExpression(
@@ -361,7 +293,7 @@ std::string CBackend::escapeString(const std::string& str) {
     return ss.str();
 }
 
-std::string CBackend::indent(int level) const {
+std::string CBackend::indent(int level) {
     return std::string(level * 4, ' ');
 }
 
