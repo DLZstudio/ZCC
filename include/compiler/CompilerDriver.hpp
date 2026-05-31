@@ -214,6 +214,7 @@ inline bool CompilerDriver::runExternalCompiler(ILanguageBackend* backend,
     
     std::string cmd = cc->buildCommand(result.sourceOutputFile, result.outputFile,
                                         runtimeFiles, request.optLevel);
+    cmd += " -O" + std::to_string(request.optLevel);
     
     std::cout << "Compiling: " << cmd << "\n";
     int ret = std::system(cmd.c_str());

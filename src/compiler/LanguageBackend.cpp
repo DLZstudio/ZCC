@@ -88,8 +88,13 @@ private:
 
 std::optional<CompilerConfig> CBackendPlugin::getCompilerConfig() const {
     return CompilerConfig{
-        "GCC_EXEC_PREFIX=C:/mingw1310/lib/gcc/ C:/mingw1310/bin/gcc.exe",
-        "C:/mingw1310/bin/gcc.exe {input} -o {output} -O{flags} -lm -I. -B C:/mingw1310/x86_64-w64-mingw32/lib/ -L C:/mingw1310/x86_64-w64-mingw32/lib/",
+        "C:/mingw1310/bin/gcc.exe",
+        "C:/mingw1310/bin/gcc.exe {input} -o {output} "
+        "-BC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
+        "-BC:/mingw1310/x86_64-w64-mingw32/lib/ "
+        "-LC:/mingw1310/x86_64-w64-mingw32/lib/ "
+        "-LC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
+        "-lm -I. -I runtime -Wno-implicit-function-declaration",
         {"-std=c11"},
         false
     };
