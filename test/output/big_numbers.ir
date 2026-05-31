@@ -1,0 +1,43 @@
+.version 1.0
+.module "test/big_numbers.zcc"
+.source "test/big_numbers.zcc"
+
+.func i64 @main() {
+entry:
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+  <instr>
+}
+

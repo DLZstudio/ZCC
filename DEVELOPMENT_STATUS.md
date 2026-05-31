@@ -211,13 +211,26 @@ runtime/zcc_runtime.h (160行) + runtime/zcc_runtime.c (730行)
 
 | 阶段 | 模式 | 状态 | 优先级 |
 |------|------|------|--------|
-| 统一 CLI 入口 (zcc run 走 IR→C→GCC) | 模式三 | ❌ | P1 ← 下一步 |
-| 编写完整测试用例 | — | ⚠️ 进行中 | — |
-| 优化器 (8 Pass 填逻辑) | 模式二 | ❌ 框架就绪 | P2 |
-| 换行符 lexer bug | — | ⚠️ | 低 |
-| 移植 v0.1 新语法 | — | ❌ | 后置 |
+| 统一 CLI 入口 (zcc run 走 IR→C→GCC+Runtime) | 模式三 | ❌ | P1 |
+| Parser 语法补全 (for/i++/=>/对象/数组字面量) | 模式一 | ❌ | P2 |
+| CBackend + zcc_runtime 端到端编译链路 | 模式一 | ❌ | P2 |
+| 优化器 (8 Pass 填逻辑) | 模式二 | ❌ 框架就绪 | P3 |
 | 移植 v0.1 Module/IPC | — | ❌ | 后置 |
 | NativeBackend 解释器 | 模式二 | ❌ 暂缓 | — |
+
+### 已完成
+
+| 阶段 | 状态 |
+|------|------|
+| ✅ Lexer 注释 + 换行 Bug 修复 (Phase 1) | 100% |
+| ✅ IR 生成 main 函数包装 (Phase 2) | 100% |
+| ✅ CBackend 62/62 操作码全覆盖 (P0) | 100% |
+| ✅ zcc_runtime C 运行时库 (P0) | 100% |
+| ✅ IR 生成器 30 个 visitor 方法 | 100% |
+| ✅ 前端 Lexer/Parser/AST/Keywords | 100% |
+| ✅ 字节码 CodeGenerator 95% | 可用 |
+| ✅ 8 文件测试套件 (76 用例) | 100% |
+| ✅ `zcc compile` / `zcc ir` 命令 | 可用 |
 
 ---
 
