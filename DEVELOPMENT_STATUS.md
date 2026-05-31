@@ -241,8 +241,15 @@ runtime/zcc_runtime.h (160行) + runtime/zcc_runtime.c (730行)
 | Parser 语法补全 (for/i++/=>/对象/数组字面量) | 模式一 | ❌ | P2 |
 | C编译器环境变量自动适配 | 模式一 | ⚠️ | 低 |
 | 优化器 (8 Pass 填逻辑) | 模式二 | ❌ 框架就绪 | P3 |
-| 移植 v0.1 Module/IPC | — | ❌ | 后置 |
+| 移植 v0.1 Module/IPC | — | ✅ 移植完成 | 刚完成 |
 | NativeBackend 解释器 | 模式二 | ❌ 暂缓 | — |
+
+### 新增组件
+
+| 组件 | 文件 | 功能 |
+|------|------|------|
+| 模块系统 | Module.hpp/cpp (575+1090行) | 虚空接口、SmartSCALoader、依赖分析 |
+| IPC 框架 | IPC.hpp/cpp (529+837行) | Windows命名管道/Unix Socket进程通信 |
 
 ### 已完成
 
