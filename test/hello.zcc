@@ -1,0 +1,3 @@
+auto greeting = "Hello ZCC!";
+auto version = 2;
+auto message = greeting + " v" + version;

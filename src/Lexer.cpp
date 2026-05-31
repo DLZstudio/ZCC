@@ -114,8 +114,13 @@ Token Lexer::scanToken() {
         return *op;
     }
     
-    // 未知字符
-    return errorToken("Unexpected character: " + std::string(1, peekChar()));
+    // 未知字符 — 跳过空白字符，不报错
+    char unknown = peekChar();
+    if (unknown == ' ' || unknown == '\t' || unknown == '\r' || unknown == '\n') {
+        advance();
+        return makeToken(TokenType::ERROR, std::monostate{});
+    }
+    return errorToken("Unexpected character: " + std::string(1, unknown));
 }
 
 std::optional<Token> Lexer::scanWhitespaceOrComment() {
