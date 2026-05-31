@@ -28,11 +28,37 @@ e:\114514\语言\ZCC\
 
 ## ZCC 三大编译模式 (官方规格)
 
-| 模式 | 代号 | 链路 | 成熟度 | 优先级 |
+| 模式 | 代号 | 链路 | 完成度 | 优先级 |
 |------|------|------|--------|--------|
-| 模式一：源码转译 | `zcc transpile` | .zcc → IR → C → GCC → exe | 90% | P0 ← 当前 |
-| 模式二：通用 IR | `zcc ir` | .zcc → IR → .ir 文件 | 40% | P2 |
-| 模式三：直出可执行 | `zcc run` | 模式一的用户友好包装 | 70% | P1 |
+| 模式一：源码转译 | `zcc build --lang c` | .zcc → IR → C → GCC → exe | **90%** | ✅ 交付 |
+| 模式二：通用 IR | `zcc ir` | .zcc → IR → Optimizer → .ir | **40%** | ← 当前 |
+| 模式三：直出可执行 | `zcc run` | 模式一的用户包装 | **85%** | ✅ 交付 |
+
+### 模式一详析 (90%)
+```
+✅ Lexer/Parser/AST        100%
+✅ IRGenerator (30 visitors) 100%
+✅ CBackend (62/62 opcodes)  100%
+✅ zcc_runtime.c/h          100%
+✅ GCC自动调用 (zcc build)    100%  ← 刚刚修好
+❌ 其他语言后端(Python等)      0%
+```
+**已验证**: `auto x = 42;` → `zcc build --lang c` → 自动生成C代码 → 自动调GCC → 产出exe → 运行成功
+
+### 模式二详析 (40%)
+```
+✅ IR生成 + toText()        100%
+❌ 优化器 (8 Pass)            0%   ← 现在开始实现
+❌ NativeBackend解释器        0%   (暂缓)
+❌ .ir文件执行                0%   (暂缓)
+```
+
+### 模式三详析 (85%)
+```
+✅ CompilerDriver/插件系统   100%
+✅ zcc build/run/languages   100%
+✅ IR→C→GCC→exe全链路        100%
+```
 
 ---
 

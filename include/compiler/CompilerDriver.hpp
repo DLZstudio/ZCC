@@ -11,6 +11,7 @@
 #include <iostream>
 #include <cstdlib>
 #include "IRGenerator.hpp"
+#include "Optimizer.hpp"
 #include "LanguageBackend.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
@@ -23,6 +24,7 @@ struct BuildRequest {
     std::string outputFile;           // 输出文件 (可选, 自动推断)
     std::string targetLanguage;       // 目标语言: "c", "cpp", 未来 "python", "java", ...
     int         optLevel = 1;         // 优化级别 0-3
+    bool        optimize = true;       // 是否运行优化器
     bool        keepIntermediate = true;  // 保留中间文件 (.c/.ir)
     std::string runtimeDir;           // zcc_runtime 所在目录
 };
@@ -62,6 +64,7 @@ private:
                    ProgramPtr& program, BuildResult& result);
     bool runIRGenerator(ProgramPtr program, const std::string& filename,
                         std::unique_ptr<ZCCIRModule>& ir, BuildResult& result);
+    bool runOptimizer(std::unique_ptr<ZCCIRModule>& ir, int optLevel, BuildResult& result);
     bool runLanguageBackend(const ZCCIRModule& ir, ILanguageBackend* backend,
                             const BuildRequest& request, BuildResult& result);
     bool runExternalCompiler(ILanguageBackend* backend,
@@ -106,6 +109,13 @@ inline BuildResult CompilerDriver::build(const BuildRequest& request) {
     // 4. IR 生成
     std::unique_ptr<ZCCIRModule> ir;
     if (!runIRGenerator(program, request.sourceFile, ir, result)) return result;
+    
+    // 5. 优化 (如果启用)
+    if (request.optimize) {
+        runOptimizer(ir, request.optLevel, result);
+    }
+    
+    // 6. 选择语言后端
     
     // 5. 选择语言后端
     auto* backend = LanguageBackendRegistry::instance().getBackend(request.targetLanguage);
@@ -174,6 +184,15 @@ inline bool CompilerDriver::runIRGenerator(ProgramPtr program, const std::string
         return false;
     }
     return true;
+}
+
+inline bool CompilerDriver::runOptimizer(std::unique_ptr<ZCCIRModule>& ir, int optLevel, BuildResult& result) {
+    auto optimizer = createOptimizer(static_cast<OptimizationLevel>(optLevel));
+    bool modified = optimizer->optimize(*ir);
+    if (modified) {
+        std::cout << "Optimized: " << optimizer->getStats().passesRun << " passes\n";
+    }
+    return true;  // 优化即使无效也继续
 }
 
 inline bool CompilerDriver::runLanguageBackend(const ZCCIRModule& ir, ILanguageBackend* backend,
