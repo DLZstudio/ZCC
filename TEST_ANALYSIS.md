@@ -1,8 +1,80 @@
 # ZCC v0.2 测试分析报告
 
-> **测试日期**: 2026-05-31  
-> **测试范围**: 7 个功能测试文件 + 1 个语法错误测试文件  
-> **测试命令**: `zcc ir` (IR 生成) + `zcc compile` (字节码编译)
+> **测试日期**: 2026-05-31 (更新)  
+> **版本**: 修复后 (Phase 1+2 完成)
+
+## 一、修复后的测试概览
+
+| 测试文件 | 描述 | Lexer | Parser | IR 生成 | 评级 |
+|----------|------|-------|--------|---------|------|
+| `test.zcc` | `auto x = 42;` | ✅ | ✅ | ✅ `.func main` | 通过 |
+| `big_numbers.zcc` | 高精度算术 10 例 | ✅ | ✅ | ✅ 26 instr | 通过 |
+| `dynamic_types.zcc` | 动态类型 10 例 | ✅ | ❌ `+=` 不支持 | — | Parser 限制 |
+| `control_flow.zcc` | 控制流 10 例 | ✅ | ❌ `i++` 不支持 | — | Parser 限制 |
+| `arrays_objects.zcc` | 数组/对象 9 例 | ✅ | ❌ 对象字面量 | — | Parser 限制 |
+| `functions.zcc` | 函数 10 例 | ✅ | ❌ `=>` 不支持 | — | Parser 限制 |
+| `edge_cases.zcc` | 极端/错误 15 例 | ✅ | ❌ 多种语法 | — | Parser 限制 |
+| `hello.zcc` | 中文打印 | ❌ `打印行` 不是关键词 | — | — | 缺关键词 |
+| `syntax_errors.zcc` | 语法错误 10 例 | ✅ 捕获 4 个 | — | — | 通过 |
+
+**通过率: 2/8 (25%) | Lexer 修复率: 100% (注释+换行问题已消除)**
+
+---
+
+## 二、Phase 1 修复结果
+
+### ✅ Bug #1: `//` 注释 — 已修复
+- **症状**: 消除，`big_numbers.zcc` (含大量 `//` 注释) 正常通过
+- **修复**: `skipWhitespace()` 不再吞注释，注释检测统一由 `scanWhitespaceOrComment()` 处理
+
+### ✅ Bug #2: `\n` 换行符 — 已修复  
+- **症状**: 消除（`big_numbers.zcc` 有多行换行，无警告）
+- **修复**: `skipWhitespace()` 中 `\n` 正确处理，注释后也吃掉换行符
+
+## 三、Phase 2 修复结果
+
+### ✅ Bug #3: IR 空输出 — 已修复
+
+修复前:
+```
+.version 1.0
+.module "test.zcc"
+.source "test.zcc"
+(空)
+```
+
+修复后:
+```
+.version 1.0
+.module "test.zcc"
+.source "test.zcc"
+.func i64 @main() {
+entry:
+  <instr>
+  <instr>
+  ...
+}
+```
+
+- `visitProgram()` 检查是否有显式 `function main`
+- 没有时自动为顶层变量创建 `main` 函数包装
+- 函数返回 `i64`，末尾隐式 `return 0`
+
+---
+
+## 四、剩余 Parser 问题（Phase 4 待处理）
+
+| 语法 | 状态 | 影响文件 |
+|------|------|---------|
+| `+=`, `-=`, `*=` 复合赋值 | ❌ 不支持 | dynamic_types |
+| `i++`, `i--` 自增自减 | ❌ 不支持 | control_flow, edge_cases |
+| `<=` 比较运算符 | ❌ 不支持 | control_flow |
+| `=>` 箭头函数 | ❌ 不支持 | functions |
+| `{ key: val }` 对象字面量 | ❌ 不支持 | arrays_objects |
+| `[1,2,3]` 数组字面量 | ❌ 不支持 | arrays_objects |
+| `打印行` 中文关键词 | ❌ 不在词表 | hello |
+
+这些是 v0.2 的 Parser 设计范围限制，非回归 Bug。将在后续语法移植阶段统一修复。
 
 ---
 
