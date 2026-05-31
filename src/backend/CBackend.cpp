@@ -118,80 +118,237 @@ std::string CBackend::generateBlock(const ZCCIRBlock& block) {
 std::string CBackend::generateInstruction(const ZCCIRInstruction& instr) {
     std::ostringstream ss;
     
+    // 辅助宏：获取操作数的名字
+    auto opName = [&](size_t idx) -> std::string {
+        if (idx >= instr.getNumOperands()) return "???";
+        auto val = instr.getOperand(idx).getValue();
+        return val ? val->getName() : "???";
+    };
+    
     switch (instr.getOpcode()) {
+        // ========== 无操作 ==========
         case ZCCIROpcode::NOP:
-            ss << "; // NOP";
+            ss << "// NOP";
             break;
             
+        // ========== 算术运算 ==========
         case ZCCIROpcode::ADD:
-            ss << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << " + "
-               << instr.getOperand(2).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << " + " << opName(2) << ";";
             break;
-            
         case ZCCIROpcode::SUB:
-            ss << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << " - "
-               << instr.getOperand(2).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << " - " << opName(2) << ";";
             break;
-            
         case ZCCIROpcode::MUL:
-            ss << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << " * "
-               << instr.getOperand(2).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << " * " << opName(2) << ";";
             break;
-            
         case ZCCIROpcode::DIV:
-            ss << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << " / "
-               << instr.getOperand(2).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << " / " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::MOD:
+            ss << opName(0) << " = " << opName(1) << " % " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::NEG:
+            ss << opName(0) << " = -" << opName(1) << ";";
+            break;
+        case ZCCIROpcode::INC:
+            ss << opName(0) << "++;";
+            break;
+        case ZCCIROpcode::DEC:
+            ss << opName(0) << "--;";
+            break;
+        case ZCCIROpcode::POW:
+            ss << opName(0) << " = pow(" << opName(1) << ", " << opName(2) << ");";
             break;
             
+        // ========== 位运算 ==========
+        case ZCCIROpcode::AND:
+            ss << opName(0) << " = " << opName(1) << " & " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::OR:
+            ss << opName(0) << " = " << opName(1) << " | " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::XOR:
+            ss << opName(0) << " = " << opName(1) << " ^ " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::NOT:
+            ss << opName(0) << " = ~" << opName(1) << ";";
+            break;
+        case ZCCIROpcode::SHL:
+            ss << opName(0) << " = " << opName(1) << " << " << opName(2) << ";";
+            break;
+        case ZCCIROpcode::SHR:
+            ss << opName(0) << " = " << opName(1) << " >> " << opName(2) << ";";
+            break;
+            
+        // ========== 比较运算 ==========
+        case ZCCIROpcode::CMP_EQ:
+            ss << opName(0) << " = (" << opName(1) << " == " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::CMP_NE:
+            ss << opName(0) << " = (" << opName(1) << " != " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::CMP_LT:
+            ss << opName(0) << " = (" << opName(1) << " < " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::CMP_LE:
+            ss << opName(0) << " = (" << opName(1) << " <= " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::CMP_GT:
+            ss << opName(0) << " = (" << opName(1) << " > " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::CMP_GE:
+            ss << opName(0) << " = (" << opName(1) << " >= " << opName(2) << ");";
+            break;
+            
+        // ========== 内存操作 ==========
         case ZCCIROpcode::LOAD:
-            ss << instr.getOperand(0).getValue()->getName() << " = *"
-               << instr.getOperand(1).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << ";";
             break;
-            
         case ZCCIROpcode::STORE:
-            ss << "*" << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << ";";
+            ss << opName(0) << " = " << opName(1) << ";";
+            break;
+        case ZCCIROpcode::ALLOCA:
+            ss << "// ALLOCA: " << opName(0) << " = alloca(" << opName(1) << ");";
+            break;
+        case ZCCIROpcode::ALLOC:
+            ss << opName(0) << " = malloc(" << opName(1) << ");";
+            break;
+        case ZCCIROpcode::FREE:
+            ss << "free(" << opName(0) << ");";
             break;
             
-        case ZCCIROpcode::CALL:
-            ss << instr.getOperand(0).getValue()->getName() << " = "
-               << instr.getOperand(1).getValue()->getName() << "(";
+        // ========== 类型转换 ==========
+        case ZCCIROpcode::TRUNC:
+        case ZCCIROpcode::ZEXT:
+        case ZCCIROpcode::SEXT:
+        case ZCCIROpcode::FPTRUNC:
+        case ZCCIROpcode::FPEXT:
+        case ZCCIROpcode::FPTOUI:
+        case ZCCIROpcode::FPTOSI:
+        case ZCCIROpcode::UITOFP:
+        case ZCCIROpcode::SITOFP:
+        case ZCCIROpcode::BITCAST:
+            ss << opName(0) << " = (" << convertType(*instr.getType()) << ")" << opName(1) << ";";
+            break;
+            
+        // ========== 控制流 ==========
+        case ZCCIROpcode::CALL: {
+            ss << opName(0) << " = " << opName(1) << "(";
             for (size_t i = 2; i < instr.getNumOperands(); ++i) {
                 if (i > 2) ss << ", ";
-                ss << instr.getOperand(i).getValue()->getName();
+                ss << opName(i);
             }
             ss << ");";
             break;
-            
+        }
         case ZCCIROpcode::RET:
             if (instr.getNumOperands() > 0) {
-                ss << "return " << instr.getOperand(0).getValue()->getName() << ";";
+                ss << "return " << opName(0) << ";";
             } else {
                 ss << "return;";
             }
             break;
-            
         case ZCCIROpcode::JMP:
-            ss << "goto " << instr.getOperand(0).getValue()->getName() << ";";
+            ss << "goto " << opName(0) << ";";
             break;
-            
         case ZCCIROpcode::JMP_IF:
-            ss << "if (" << instr.getOperand(0).getValue()->getName() << ") "
-               << "goto " << instr.getOperand(1).getValue()->getName() << ";";
+            ss << "if (" << opName(0) << ") goto " << opName(1) << ";";
+            break;
+        case ZCCIROpcode::JMP_IF_NOT:
+            ss << "if (!" << opName(0) << ") goto " << opName(1) << ";";
+            break;
+        case ZCCIROpcode::PHI:
+            ss << "// PHI: " << opName(0) << " = phi(";
+            for (size_t i = 1; i < instr.getNumOperands(); ++i) {
+                if (i > 1) ss << ", ";
+                ss << opName(i);
+            }
+            ss << ");";
             break;
             
+        // ========== 高精度运算（调用 BigNum 运行时函数） ==========
         case ZCCIROpcode::BIG_ADD:
-            ss << "bignum_add(&" << instr.getOperand(0).getValue()->getName()
-               << ", &" << instr.getOperand(1).getValue()->getName()
-               << ", &" << instr.getOperand(2).getValue()->getName() << ");";
+            ss << "bignum_add(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_SUB:
+            ss << "bignum_sub(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_MUL:
+            ss << "bignum_mul(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_DIV:
+            ss << "bignum_div(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_MOD:
+            ss << "bignum_mod(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_CMP:
+            ss << opName(0) << " = bignum_cmp(&" << opName(1) << ", &" << opName(2) << ");";
+            break;
+        case ZCCIROpcode::BIG_POW:
+            ss << "bignum_pow(&" << opName(0) << ", &" << opName(1) << ", &" << opName(2) << ");";
+            break;
+            
+        // ========== 字符串操作 ==========
+        case ZCCIROpcode::STR_CONCAT:
+            ss << opName(0) << " = str_concat(" << opName(1) << ", " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::STR_LEN:
+            ss << opName(0) << " = strlen(" << opName(1) << ");";
+            break;
+        case ZCCIROpcode::STR_CMP:
+            ss << opName(0) << " = strcmp(" << opName(1) << ", " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::STR_SLICE:
+            ss << opName(0) << " = str_slice(" << opName(1) << ", " << opName(2) << ", " << opName(3) << ");";
+            break;
+            
+        // ========== 数组操作 ==========
+        case ZCCIROpcode::ARRAY_NEW:
+            ss << opName(0) << " = zcc_array_new();";
+            break;
+        case ZCCIROpcode::ARRAY_GET:
+            ss << opName(0) << " = zcc_array_get(" << opName(1) << ", " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::ARRAY_SET:
+            ss << "zcc_array_set(" << opName(0) << ", " << opName(1) << ", " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::ARRAY_LEN:
+            ss << opName(0) << " = zcc_array_len(" << opName(1) << ");";
+            break;
+            
+        // ========== 对象操作 ==========
+        case ZCCIROpcode::OBJECT_NEW:
+            ss << opName(0) << " = zcc_object_new();";
+            break;
+        case ZCCIROpcode::OBJECT_GET:
+            ss << opName(0) << " = zcc_object_get(" << opName(1) << ", " << opName(2) << ");";
+            break;
+        case ZCCIROpcode::OBJECT_SET:
+            ss << "zcc_object_set(" << opName(0) << ", " << opName(1) << ", " << opName(2) << ");";
+            break;
+            
+        // ========== 异常 ==========
+        case ZCCIROpcode::THROW:
+            ss << "zcc_throw(" << opName(0) << ");";
+            break;
+            
+        // ========== 特殊操作 ==========
+        case ZCCIROpcode::INTRINSIC:
+            ss << "// INTRINSIC: " << opName(0);
+            break;
+        case ZCCIROpcode::ASSEMBLY:
+            ss << "__asm__(" << escapeString(opName(0)) << ");";
+            break;
+        case ZCCIROpcode::TRAP:
+            ss << "abort();";
+            break;
+        case ZCCIROpcode::UNREACHABLE:
+            ss << "__builtin_unreachable();";
             break;
             
         default:
-            ss << "// TODO: Implement opcode " << static_cast<int>(instr.getOpcode());
+            ss << "// TODO: opcode " << static_cast<int>(instr.getOpcode());
             break;
     }
     

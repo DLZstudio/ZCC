@@ -382,6 +382,7 @@ public:
 
     // 序列化
     std::string serialize() const;
+    std::string toText() const;  // 人类可读的 IR 文本输出
     static std::unique_ptr<ZCCIRModule> deserialize(const std::string& ir);
 
 private:

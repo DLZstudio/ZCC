@@ -1,12 +1,16 @@
 #include <iostream>
 #include <string>
 #include <filesystem>
+#include <fstream>
 
 #include "Platform.hpp"
 #include "ZCCIR.hpp"
 #include "Backend.hpp"
 #include "NativeBackend.hpp"
 #include "Compiler.hpp"
+#include "IRGenerator.hpp"
+#include "Lexer.hpp"
+#include "Parser.hpp"
 
 using namespace zcc;
 
@@ -272,9 +276,59 @@ int irCommand(int argc, char* argv[], int argIndex) {
     
     std::cout << "Generating IR: " << inputFile << " -> " << outputFile << "\n";
     
-    // TODO: 生成 IR 文件
-    std::cerr << "Error: IR generation is not implemented yet\n";
-    return 1;
+    // 读取源文件
+    std::ifstream file(inputFile, std::ios::binary);
+    if (!file) {
+        std::cerr << "Error: Cannot open file: " << inputFile << "\n";
+        return 1;
+    }
+    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+    
+    // 词法分析
+    Lexer lexer(source, inputFile);
+    auto tokens = lexer.tokenize();
+    if (lexer.hasErrors()) {
+        std::cerr << "Lexer errors:\n";
+        for (auto& e : lexer.getErrors()) std::cerr << "  " << e.message << "\n";
+        return 1;
+    }
+    
+    // 语法分析
+    Parser parser(tokens, inputFile);
+    auto program = parser.parse();
+    if (parser.hasErrors()) {
+        std::cerr << "Parser errors:\n";
+        for (auto& e : parser.getErrors()) std::cerr << "  " << e.message << "\n";
+        return 1;
+    }
+    
+    // IR 生成
+    IRGeneratorConfig irConfig;
+    irConfig.moduleName = inputFile;
+    irConfig.target = TargetPlatform::getCurrent();
+    IRGenerator irGen(irConfig);
+    auto irModule = irGen.generate(program);
+    
+    if (irGen.hasErrors()) {
+        std::cerr << "IR generation errors:\n";
+        for (auto& e : irGen.getErrors()) std::cerr << "  " << e.message << "\n";
+        return 1;
+    }
+    
+    // 输出 IR 文本
+    std::string irText = irModule->toText();
+    std::ofstream outFile(outputFile);
+    if (!outFile) {
+        std::cerr << "Error: Cannot write to: " << outputFile << "\n";
+        return 1;
+    }
+    outFile << irText;
+    outFile.close();
+    
+    std::cout << "IR generated successfully: " << outputFile << "\n";
+    std::cout << "IR size: " << irText.size() << " bytes\n";
+    return 0;
 }
 
 int main(int argc, char* argv[]) {

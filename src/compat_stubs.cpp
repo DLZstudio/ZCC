@@ -97,6 +97,43 @@ bool ZCCType::isSubtypeOf(const ZCCType& other) const {
     return getName() == other.getName();
 }
 
+// ==================== ZCCIRModule serialize/toText ====================
+std::string ZCCIRModule::serialize() const {
+    return toText();
+}
+
+std::string ZCCIRModule::toText() const {
+    std::ostringstream ss;
+    ss << ".version 1.0\n";
+    ss << ".module \"" << name_ << "\"\n";
+    ss << ".source \"" << metadata_.sourceFile << "\"\n\n";
+    
+    for (const auto& g : globals_) {
+        ss << ".global " << g->getType()->getName() << " @" << g->getName() << "\n";
+    }
+    if (!globals_.empty()) ss << "\n";
+    
+    for (const auto& func : functions_) {
+        ss << ".func " << func->getReturnType()->getName() << " @" << func->getName() << "(";
+        const auto& args = func->getArguments();
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i > 0) ss << ", ";
+            ss << args[i].second->getName() << " %" << args[i].first;
+        }
+        ss << ")";
+        if (func->isExternal()) ss << " extern";
+        ss << " {\n";
+        for (const auto& block : func->getBlocks()) {
+            ss << block->getLabel() << ":\n";
+            for (const auto& instr : block->getInstructions()) {
+                ss << "  " << instr->toString() << "\n";
+            }
+        }
+        ss << "}\n\n";
+    }
+    return ss.str();
+}
+
 // ==================== ZCCIRBlock ====================
 void ZCCIRBlock::addSuccessor(ZCCIRBlock* block) {
     if (block) successors_.push_back(block);

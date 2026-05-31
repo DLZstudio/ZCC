@@ -49,6 +49,9 @@ public:
     void visitFunctionDecl(FunctionDecl* decl) override;
     void visitVariableDecl(VariableDecl* decl) override;
     void visitClassDecl(ClassDecl* decl) override;
+    void visitModuleDecl(ModuleDecl* decl) override;
+    void visitImportDecl(ImportDecl* decl) override;
+    void visitExportDecl(ExportDecl* decl) override;
     void visitBlockStmt(BlockStmt* stmt) override;
     void visitExpressionStmt(ExpressionStmt* stmt) override;
     void visitIfStmt(IfStmt* stmt) override;
@@ -129,6 +132,12 @@ private:
 
 inline IRGenerator::IRGenerator(IRGeneratorConfig config)
     : config_(std::move(config)) {}
+
+inline std::unique_ptr<ZCCIRModule> IRGenerator::generate(ProgramPtr program) {
+    if (!program) return nullptr;
+    visitProgram(program.get());
+    return std::move(module_);
+}
 
 inline void IRGenerator::enterScope(bool isFunction) {
     auto* newScope = new ScopeInfo();
@@ -615,6 +624,21 @@ inline void IRGenerator::visitCallExpr(CallExpr* expr) {
     operands.insert(operands.end(), args.begin(), args.end());
     
     emitInstruction(ZCCIROpcode::CALL, operands);
+}
+
+// 模块声明 - 不需要生成代码
+inline void IRGenerator::visitModuleDecl(ModuleDecl* decl) {
+    // 模块声明不影响 IR 生成
+}
+
+// 导入声明
+inline void IRGenerator::visitImportDecl(ImportDecl* decl) {
+    // 导入在编译时处理，不影响 IR
+}
+
+// 导出声明
+inline void IRGenerator::visitExportDecl(ExportDecl* decl) {
+    // 导出通过模块系统处理
 }
 
 // 类声明 - 生成类定义和构造函数的 IR
