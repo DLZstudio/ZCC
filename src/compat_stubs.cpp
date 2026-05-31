@@ -203,7 +203,29 @@ void ZCCIRInstruction::addOperand(ZCCIROperand operand) {
 }
 
 std::string ZCCIRInstruction::toString() const {
-    return "<instr>";
+    static const char* names[] = {
+        "nop","jmp","jmp_if","jmp_if_not","call","ret","phi",
+        "add","sub","mul","div","mod","neg","inc","dec","pow",
+        "and","or","xor","not","shl","shr",
+        "cmp_eq","cmp_ne","cmp_lt","cmp_le","cmp_gt","cmp_ge",
+        "load","store","alloca","alloc","free",
+        "trunc","zext","sext","fptrunc","fpext","fptoui","fptosi","uitofp","sitofp","bitcast",
+        "big_add","big_sub","big_mul","big_div","big_mod","big_cmp","big_pow",
+        "str_concat","str_len","str_cmp","str_slice",
+        "array_new","array_get","array_set","array_len",
+        "object_new","object_get","object_set",
+        "throw","intrinsic","assembly","trap","unreachable"
+    };
+    std::string s;
+    int idx = static_cast<int>(getOpcode());
+    if (idx >= 0 && idx < (int)(sizeof(names)/sizeof(names[0]))) s = names[idx];
+    else s = "op" + std::to_string(idx);
+    s += " %" + std::to_string(getID());
+    for (size_t i = 0; i < getNumOperands(); ++i) {
+        auto val = getOperand(i).getValue();
+        s += val ? (" %" + std::to_string(val->getID())) : " _";
+    }
+    return s;
 }
 
 // ==================== ZCCIRBlock (addInstruction) ====================

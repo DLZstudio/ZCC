@@ -111,6 +111,9 @@ private:
     // 当前表达式结果（用于 generateExpression 返回值）
     ZCCIRValue::ID currentExprResult_ = 0;
     
+    // 值表: ID → ZCCIRValue (共享指针，用于操作数引用)
+    std::unordered_map<ZCCIRValue::ID, std::shared_ptr<ZCCIRValue>> values_;
+    
     // 成员
     IRGeneratorConfig config_;
     std::unique_ptr<ZCCIRModule> module_;
@@ -190,16 +193,23 @@ inline ZCCIRValue::ID IRGenerator::emitInstruction(
     auto instr = std::make_unique<ZCCIRInstruction>(
         opcode, type ? type : getVoid(), nextInstructionID_++);
     
-    // 添加操作数
+    // 从 ID 查找真实的 ZCCIRValue 对象，创建操作数引用
     for (auto id : operands) {
-        // TODO: 从值 ID 创建操作数
-        instr->addOperand(ZCCIROperand());
+        auto it = values_.find(id);
+        if (it != values_.end()) {
+            instr->addOperand(ZCCIROperand(it->second));
+        } else {
+            instr->addOperand(ZCCIROperand()); // 未找到的回退
+        }
     }
     
+    // 创建结果值并注册
     ZCCIRValue::ID resultID = 0;
     if (type && type->getName() != "void") {
         resultID = nextValueID_++;
-        // TODO: 创建临时值
+        auto resultVal = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::TEMPORARY, type, resultID);
+        values_[resultID] = resultVal;
     }
     
     currentBlock_->addInstruction(std::move(instr));
@@ -250,6 +260,7 @@ inline ZCCIRValue::ID IRGenerator::emitConstant(
         std::move(value), type ? type : getAny(), nextValueID_++);
     
     module_->addConstant(constant);
+    values_[constant->getID()] = constant;  // 注册到值表
     return constant->getID();
 }
 
