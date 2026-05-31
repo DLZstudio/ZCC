@@ -119,7 +119,9 @@ std::optional<Token> Lexer::scanWhitespaceOrComment() {
     
     // 检查注释
     if (peekChar() == '/' && !isAtEndInternal()) {
-        if (peekNext() == '/') {
+        char next = (current_ + 1 < source_.length()) ? source_[current_ + 1] : '\0';
+        
+        if (next == '/') {
             // 单行注释
             start_ = current_;
             advance(); // /
@@ -127,10 +129,14 @@ std::optional<Token> Lexer::scanWhitespaceOrComment() {
             while (peekChar() != '\n' && !isAtEndInternal()) {
                 advance();
             }
+            // 跳过末尾的换行符
+            if (peekChar() == '\n') {
+                advance();
+            }
             size_t len = current_ - start_;
             return makeToken(TokenType::COMMENT_SINGLE, 
                            source_.substr(start_, len));
-        } else if (peekNext() == '*') {
+        } else if (next == '*') {
             // 多行注释
             start_ = current_;
             advance(); // /
@@ -163,24 +169,6 @@ void Lexer::skipWhitespace() {
         char c = peekChar();
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
             advance();
-        } else if (c == '/' && peekNext() == '/') {
-            // 单行注释
-            advance();
-            advance();
-            while (peekChar() != '\n' && !isAtEndInternal()) {
-                advance();
-            }
-        } else if (c == '/' && peekNext() == '*') {
-            // 多行注释
-            advance();
-            advance();
-            while (!isAtEndInternal() && !(peekChar() == '*' && peekNext() == '/')) {
-                advance();
-            }
-            if (!isAtEndInternal()) {
-                advance();
-                advance();
-            }
         } else {
             break;
         }

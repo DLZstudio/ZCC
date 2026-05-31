@@ -298,14 +298,48 @@ inline void IRGenerator::visitProgram(Program* program) {
     module_->getMetadata().sourceFile = program->sourceFilename;
     module_->getMetadata().target = config_.target;
     
-    // 首先处理所有声明
+    // 检查是否有顶层函数声明
+    bool hasExplicitMain = false;
     for (auto& decl : program->declarations) {
-        if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get()))
-            visitFunctionDecl(fd);
-        else if (auto* vd = dynamic_cast<VariableDecl*>(decl.get()))
-            visitVariableDecl(vd);
-        else if (auto* cd = dynamic_cast<ClassDecl*>(decl.get()))
-            visitClassDecl(cd);
+        if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get())) {
+            if (fd->name == "main") hasExplicitMain = true;
+        }
+    }
+    
+    // 如果没有显式 main，为顶层变量创建 main 函数包装
+    if (!hasExplicitMain) {
+        std::vector<std::pair<std::string, ZCCTypePtr>> mainParams;
+        auto* mainFunc = module_->createFunction("main", getI64(), std::move(mainParams));
+        currentFunction_ = mainFunc;
+        enterScope(true);
+        currentBlock_ = mainFunc->createBlock("entry");
+        
+        for (auto& decl : program->declarations) {
+            // 跳过函数声明 — 它们会在显式 main 分支中处理
+            if (dynamic_cast<FunctionDecl*>(decl.get())) continue;
+            if (auto* vd = dynamic_cast<VariableDecl*>(decl.get())) {
+                visitVariableDecl(vd);
+            } else if (auto* cd = dynamic_cast<ClassDecl*>(decl.get())) {
+                visitClassDecl(cd);
+            }
+        }
+        
+        // 隐式 return 0
+        emitTerminator(ZCCIROpcode::RET, {});
+        
+        leaveScope();
+        currentFunction_ = nullptr;
+        currentBlock_ = nullptr;
+    } else {
+        // 已有 main 函数，正常处理
+        for (auto& decl : program->declarations) {
+            if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get()))
+                visitFunctionDecl(fd);
+            else if (auto* vd = dynamic_cast<VariableDecl*>(decl.get()))
+                visitVariableDecl(vd);
+            else if (auto* cd = dynamic_cast<ClassDecl*>(decl.get()))
+                visitClassDecl(cd);
+        }
     }
 }
 
