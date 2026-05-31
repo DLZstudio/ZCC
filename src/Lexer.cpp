@@ -24,6 +24,10 @@ std::vector<Token> Lexer::tokenize() {
     while (!isAtEndInternal()) {
         start_ = current_;
         Token token = scanToken();
+        if (token.type == TokenType::ERROR) {
+            // 跳过空白字符错误 — 它们无害
+            continue;
+        }
         if (token.type != TokenType::COMMENT_SINGLE && 
             token.type != TokenType::COMMENT_MULTI) {
             tokens.push_back(std::move(token));
@@ -407,9 +411,10 @@ std::optional<Token> Lexer::scanOperator() {
         case '!': return match('=') ? (match('=') ? makeToken(TokenType::BANG_EQUAL_EQUAL) :
                                                     makeToken(TokenType::BANG_EQUAL)) :
                                      makeToken(TokenType::BANG);
-        case '=': return match('=') ? (match('=') ? makeToken(TokenType::EQUAL_EQUAL_EQUAL) :
+        case '=': return match('>') ? makeToken(TokenType::ARROW) :
+                          (match('=') ? (match('=') ? makeToken(TokenType::EQUAL_EQUAL_EQUAL) :
                                                     makeToken(TokenType::EQUAL_EQUAL)) :
-                                     makeToken(TokenType::EQUAL);
+                                     makeToken(TokenType::EQUAL));
         case '<': return match('=') ? makeToken(TokenType::LESS_EQUAL) :
                                      (match('<') ? makeToken(TokenType::LESS_LESS) :
                                       makeToken(TokenType::LESS));

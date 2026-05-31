@@ -765,17 +765,36 @@ ExprPtr Parser::parseExpression() {
     return parseAssignment();
 }
 
+// 复合赋值 → 二元操作符映射
+static TokenType compoundToBinary(TokenType compound) {
+    switch (compound) {
+        case TokenType::PLUS_EQUAL:   return TokenType::PLUS;
+        case TokenType::MINUS_EQUAL:  return TokenType::MINUS;
+        case TokenType::STAR_EQUAL:   return TokenType::STAR;
+        case TokenType::SLASH_EQUAL:  return TokenType::SLASH;
+        case TokenType::PERCENT_EQUAL: return TokenType::PERCENT;
+        default: return TokenType::PLUS;
+    }
+}
+
 ExprPtr Parser::parseAssignment() {
     auto expr = parseTernary();
     
-    if (match(TokenType::EQUAL)) {
-        if (auto ident = std::dynamic_pointer_cast<IdentifierExpr>(expr)) {
-            Token token = peek();
-            auto value = parseAssignment();
-            return std::make_shared<AssignExpr>(ident->name, value, ident->location);
-        } else {
-            error(previous(), "Invalid assignment target");
+    // 支持 = += -= *= /= %=
+    if (match({TokenType::EQUAL, TokenType::PLUS_EQUAL, TokenType::MINUS_EQUAL,
+               TokenType::STAR_EQUAL, TokenType::SLASH_EQUAL, TokenType::PERCENT_EQUAL})) {
+        TokenType opType = previous().type;
+        auto value = parseAssignment();
+        
+        // 复合赋值: i += val → i = i + val
+        if (opType != TokenType::EQUAL) {
+            value = std::make_shared<BinaryExpr>(expr, compoundToBinary(opType), value, expr->location);
         }
+        
+        if (auto ident = std::dynamic_pointer_cast<IdentifierExpr>(expr)) {
+            return std::make_shared<AssignExpr>(ident->name, value, ident->location);
+        }
+        error(previous(), "Invalid assignment target");
     }
     
     return expr;
@@ -954,6 +973,10 @@ ExprPtr Parser::parseCall() {
             auto index = parseExpression();
             expect(TokenType::RIGHT_BRACKET, "Expected ']' after index");
             expr = std::make_shared<IndexExpr>(expr, index, expr->location);
+        } else if (match(TokenType::PLUS_PLUS)) {
+            expr = std::make_shared<UnaryExpr>(TokenType::PLUS_PLUS, expr, expr->location);
+        } else if (match(TokenType::MINUS_MINUS)) {
+            expr = std::make_shared<UnaryExpr>(TokenType::MINUS_MINUS, expr, expr->location);
         } else {
             break;
         }
@@ -1001,6 +1024,40 @@ ExprPtr Parser::parsePrimary() {
     }
     
     if (match(TokenType::LEFT_PAREN)) {
+        // 尝试检测箭头函数: (params) => body
+        // 保存状态以便回退
+        size_t savedCurrent = current_;
+        
+        // 尝试解析参数列表
+        std::vector<std::string> params;
+        if (!check(TokenType::RIGHT_PAREN)) {
+            do {
+                if (check(TokenType::IDENTIFIER)) {
+                    params.push_back(advance().lexeme);
+                } else {
+                    // 不是参数列表, 回退
+                    current_ = savedCurrent;
+                    params.clear();
+                    break;
+                }
+            } while (match(TokenType::COMMA));
+        }
+        
+        if (!params.empty() && match(TokenType::RIGHT_PAREN) && match(TokenType::ARROW)) {
+            // 多参数箭头函数: (x, y) => body
+            if (check(TokenType::LEFT_BRACE)) {
+                auto body = parseBlock();
+                return std::make_shared<ArrowFunctionExpr>(params, nullptr, body->statements, false,
+                                                          SourceLocation(filename_, 0, 0, 0));
+            } else {
+                auto exprBody = parseExpression();
+                return std::make_shared<ArrowFunctionExpr>(params, exprBody, std::vector<StmtPtr>{}, false,
+                                                          SourceLocation(filename_, 0, 0, 0));
+            }
+        }
+        
+        // 回退到 '(' 后重新解析普通表达式
+        current_ = savedCurrent;
         auto expr = parseExpression();
         expect(TokenType::RIGHT_PAREN, "Expected ')' after expression");
         return expr;

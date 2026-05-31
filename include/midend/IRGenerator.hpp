@@ -308,6 +308,16 @@ inline void IRGenerator::visitProgram(Program* program) {
     
     // 如果没有显式 main，为顶层变量创建 main 函数包装
     if (!hasExplicitMain) {
+        // 先注册所有函数名 (前向引用支持)
+        for (auto& decl : program->declarations) {
+            if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get())) {
+                std::vector<std::pair<std::string, ZCCTypePtr>> fwdParams;
+                for (const auto& p : fd->parameters) fwdParams.push_back({p, getAny()});
+                auto* func = module_->createFunction(fd->name, getAny(), std::move(fwdParams));
+                functionCache_[fd->name] = func;
+            }
+        }
+        
         std::vector<std::pair<std::string, ZCCTypePtr>> mainParams;
         auto* mainFunc = module_->createFunction("main", getI64(), std::move(mainParams));
         currentFunction_ = mainFunc;
@@ -315,7 +325,6 @@ inline void IRGenerator::visitProgram(Program* program) {
         currentBlock_ = mainFunc->createBlock("entry");
         
         for (auto& decl : program->declarations) {
-            // 跳过函数声明 — 它们会在显式 main 分支中处理
             if (dynamic_cast<FunctionDecl*>(decl.get())) continue;
             if (auto* vd = dynamic_cast<VariableDecl*>(decl.get())) {
                 visitVariableDecl(vd);
@@ -331,7 +340,17 @@ inline void IRGenerator::visitProgram(Program* program) {
         currentFunction_ = nullptr;
         currentBlock_ = nullptr;
     } else {
-        // 已有 main 函数，正常处理
+        // 先注册所有函数名到缓存 (前向引用支持)
+        for (auto& decl : program->declarations) {
+            if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get())) {
+                std::vector<std::pair<std::string, ZCCTypePtr>> fwdParams;
+                for (const auto& p : fd->parameters) fwdParams.push_back({p, getAny()});
+                auto* func = module_->createFunction(fd->name, getAny(), std::move(fwdParams));
+                functionCache_[fd->name] = func;
+            }
+        }
+        
+        // 然后访问每个声明的体
         for (auto& decl : program->declarations) {
             if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get()))
                 visitFunctionDecl(fd);
@@ -1010,9 +1029,20 @@ inline void IRGenerator::visitTernaryExpr(TernaryExpr* expr) {
 }
 
 inline void IRGenerator::visitIdentifierExpr(IdentifierExpr* expr) {
+    // 内置常量
+    if (expr->name == "NaN" || expr->name == "Infinity" || expr->name == "undefined") {
+        currentExprResult_ = emitConstant(std::monostate{}, getAny());
+        return;
+    }
+    
     ZCCIRValue::ID varID = lookupVariable(expr->name);
     if (varID == 0) {
-        // 可能是全局变量或函数
+        // 检查函数缓存 (前向引用)
+        auto fit = functionCache_.find(expr->name);
+        if (fit != functionCache_.end()) {
+            currentExprResult_ = 0; // 函数引用暂不生成加载指令
+            return;
+        }
         error(expr->location, "Undefined variable: " + expr->name);
         return;
     }
