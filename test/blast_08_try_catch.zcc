@@ -1,0 +1,14 @@
+// ============================================
+// 爆破测试 #8: try-catch 异常处理
+// ZCC 有完整的 try/catch/finally 支持，
+// 这是任何带异常系统的语言的基础功能
+// ============================================
+
+function main() {
+    try {
+        auto risky = 100 / 2;
+        print(risky);
+    } catch (e) {
+        print("Caught error");
+    }
+}

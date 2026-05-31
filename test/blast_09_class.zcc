@@ -1,0 +1,16 @@
+// ============================================
+// 爆破测试 #9: 类实例化 + Constructor
+// 合法的 OOP 代码
+// ============================================
+
+class Point {
+    constructor(x, y) {
+        auto px = x;
+        auto py = y;
+    }
+}
+
+function main() {
+    auto p = new Point(10, 20);
+    print("OK");
+}

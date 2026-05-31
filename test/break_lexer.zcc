@@ -1,0 +1,38 @@
+// ============================================
+// 爆破测试 - 词法分析器 (Lexer) 专项
+// ============================================
+
+// BLAST-01: 十六进制数字 — scanNumber 读取 "0", 然后 "xDEADBEEF" 被当作标识符
+auto hex_trick = 0xDEADBEEF;
+
+// BLAST-02: 八进制混淆 — "0777" 被拆成 NUMBER(777)，不是八进制
+auto oct_danger = 0777;
+
+// BLAST-03: 二进制前缀 — "0b1010" 被拆成 NUMBER(0) + IDENTIFIER(b1010)
+auto bin_smoke = 0b10101010;
+
+// BLAST-04: .5 无前导零 — "." 被识别为 DOT，然后 "5" 是 NUMBER
+auto dot_float_pitfall = .5;
+
+// BLAST-05: 数字后紧跟字母 — "123abc" 拆成 NUMBER(123) + IDENTIFIER(abc)
+auto numeric_prefix_id = 123abc;
+
+// BLAST-06: 科学计数法残缺 — 指数符号后缺数字
+auto bad_exp_1 = 1e;
+auto bad_exp_2 = 2.5E+;
+auto bad_exp_3 = 3E-;
+
+// BLAST-07: 非法转义序列 — scanString 报错但仍包含字符
+auto str_escape_bomb = "\x\1\8\9\u\0\z";
+
+// BLAST-08: 巨长数字 — 测试 std::stod 边界
+auto huge_int = 99999999999999999999999999999999999999999999999999999999999999999999;
+
+// BLAST-09: 中英混合标识符
+auto 混合变量_abc = 42;
+auto test_中文变量 = 混合变量_abc + 1;
+
+// BLAST-10: 纯符号标识符 ($, _)
+auto $ = 1;
+auto $$ = 2;
+auto ___ = 3;

@@ -1,0 +1,20 @@
+// ============================================
+// 爆破测试 #6: 三元嵌套 + 箭头 + 闭包
+// 完全合法的函数式编程写法
+// ============================================
+
+function main() {
+    // 基本的柯里化写法 — 函数返回函数
+    function multiply(x) {
+        return function(y) {
+            return x * y;
+        };
+    }
+
+    auto double = multiply(2);
+    auto triple = multiply(3);
+
+    auto result = double(5) + triple(5);
+
+    print(result);
+}

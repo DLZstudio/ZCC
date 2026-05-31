@@ -1,0 +1,535 @@
+// ============================================
+// ZCC v0.2 爆破测试套件
+// 不修改源码，纯测试用例"攻击"编译器的薄弱点
+// 分类: 词法攻击 / 语法攻击 / 语义攻击 / 压力测试
+// ============================================
+
+// ==================== [1] 词法层攻击 ====================
+
+// 1.1 数字前缀混淆 — Lexer 不认识 0x/0b/0o 前缀，0 会被识别为数字 Number(0)，
+//     然后 xDEADBEEF / b1010 被识别为标识符。这会导致 `0 xDEAD... * ...` 被解析为乘法链！
+auto hex_trick = 0xDEADBEEF;
+auto oct_danger = 0777;
+auto bin_smoke = 0b10101010;
+
+// 1.2 巨长数字 — 测试 std::stod 的边界
+auto huge_int = 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999;
+auto tiny_float = 0.00000000000000000000000000000000000000000000000000000000000000000000000000000000001;
+
+// 1.3 科学计数法刁钻格式 — 指数后缺数字 (Lexer 应报错 "Expected digit after exponent")
+auto bad_exponent_1 = 1e;
+auto bad_exponent_2 = 2.5E+;
+auto bad_exponent_3 = 3E-;
+
+// 1.4 字符串转义陷阱 — 不合法的转义序列 (Lexer 会报 "Invalid escape sequence" 但仍生成 Token)
+auto str_escape_1 = "\x00\z\u1234";
+auto str_escape_2 = "\0";
+auto str_escape_3 = "\1\2\3\4\5\6\7\8\9";
+auto str_escape_bomb = "\\\\\\\"\"\"'''";
+
+// 1.5 中英文混合标识符 — 中文 token + 英文 token 混用
+auto 混合变量_abc123 = 42;
+auto test_中文变量 = 混合变量_abc123 + 1;
+
+// 1.6 纯符号标识符 — `$`, `_`, `$$`, `___`，Lexer 允许这些
+auto $ = 1;
+auto $$ = 2;
+auto ___ = 3;
+auto $my_var_$ = 4;
+
+// 1.7 中英文 keyword 混用 — 使用中文"如果" + 英文"else" / 英文"if" + 中文"否则"
+如果 (true) {
+    auto x = 1;
+} else {
+    auto x = 2;
+}
+
+if (true) {
+    auto y = 1;
+} 否则 {
+    auto y = 2;
+}
+
+// 1.8 关键字边界 — 关键字紧贴标识符 (无空格)，词法如何分割?
+//     "function"后直接跟字母会怎样?
+auto function_like = 1;   // 这里 function 是关键字，但 _like 是标识符的一部分
+auto constable = 2;       // const + able 不是 const 关键字
+auto switchblade = 3;     // switch + blade
+auto 参数名 = 4;
+
+// ==================== [2] 语法层攻击 ====================
+
+// 2.1 对象字面量用字符串作 key — `{ "key": value }` 在 parseObjectLiteral 中
+//     期望 IDENTIFIER，遇到 STRING 会导致错误
+auto str_key_obj = { "abc": 123, "def": 456 };
+
+// 2.2 对象字面量嵌套和尾逗号
+auto nested_obj = {
+    a: { b: { c: 1 } },
+    d: [1, 2, [3, 4, [5, 6]]],
+};
+
+// 2.3 三元表达式嵌套 — 需要测试 parseTernary 的递归
+auto ternary_nest = (1 > 0) ? (2 > 1 ? 3 : 4) : (5 > 4 ? 6 : 7);
+auto ternary_mix = true ? 1 : false ? 2 : 3;  // 右结合: true ? 1 : (false ? 2 : 3)
+
+// 2.4 运算符优先级混淆 — 混合 && || & | ^ 的同级优先级测试
+auto prec_test_1 = true || false && true;      // || 和 && 在 parseLogicalOr/And
+auto prec_test_2 = 1 | 2 & 3 ^ 4;              // 位运算符优先级
+auto prec_test_3 = 1 + 2 * 3 ** 4;             // 幂运算 > 乘法 > 加法
+auto prec_test_4 = -1 ** 2;                     // 一元负号 vs 幂运算
+auto prec_test_5 = !true && false;              // 逻辑非 > 逻辑与
+
+// 2.5 赋值表达式链
+auto a = auto b = auto c = 42;                 // a = (b = (c = 42))
+auto x = 1;
+auto y = 2;
+auto z = 3;
+x = y = z = 100;
+
+// 2.6 复合赋值运算符
+x += 1;
+y -= 2;
+z *= 3;
+
+// 2.7 深嵌套二元表达式 — 测试解析器递归栈
+auto deep_expr = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 +
+                 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 +
+                 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29 + 30 +
+                 31 + 32 + 33 + 34 + 35 + 36 + 37 + 38 + 39 + 40;
+
+// 2.8 深嵌套括号 — 测试 parsePrimary 中左括号回退逻辑
+auto deep_paren = ((((((((42))))))));
+
+// 2.9 箭头函数的各种形态
+auto arrow_simple = x => x + 1;                        // 单参数无括号
+auto arrow_multi = (a, b) => a + b;                    // 多参数有括号
+auto arrow_block = (x) => { return x * 2; };           // 块体
+auto arrow_empty = () => 42;                           // 无参数
+auto arrow_nested = x => y => x + y;                    // 柯里化箭头函数
+
+// 2.10 箭头函数参数检测 — parsePrimary 有回退逻辑
+//      (x 会先被当作参数探测，如果不是箭头则回退为括号表达式
+var test_looks_like_params = (a + b) * (c + d);       // 括号表达式，非箭头参数
+
+// 2.11 后置 ++/-- 作用在非左值上 — parseCall 允许任意表达式
+auto not_lvalue_inc1 = (a + 1)++;                      // 应该是非法操作
+auto not_lvalue_inc2 = 3++;                            // 常数自增，应非法
+auto not_lvalue_dec = (x * y)--;
+
+// 2.12 漏分号后的解析
+auto missing_semicolon_1 = 1
+auto missing_semicolon_2 = 2;
+
+// 2.13 if/else 悬挂 — 经典的 dangling else 问题
+if (true)
+    if (false)
+        auto inner = 1;
+    else
+        auto outer = 2;    // else 匹配内层 if 还是外层?
+
+// 2.14 多种括号不匹配 — 测试 parseBlock/parseArray 的错误恢复
+auto bad_bracket_a = [1, 2, 3;
+auto bad_bracket_b = (1 + (2 * 3;
+auto bad_bracket_c = {a: 1;
+
+// 2.15 空分号和多分号
+auto blank_semi_1 = ;;;;                           // 空表达式?
+auto blank_semi_2 = 1;;;;;;                     
+
+// 2.16 位运算表达式链
+auto bitwise_chain = 1 << 2 >> 3 & 4 | 5 ^ ~6;
+
+// ==================== [3] 语句层攻击 ====================
+
+// 3.1 break/continue 在循环外 (语义错误)
+break;
+continue;
+
+// 3.2 return 后紧跟表达式 (不跟分号的情况)
+function return_test_1() {
+    return
+        1 + 2;           // 会被解析为 return; 1 + 2; (ASL 问题)
+}
+
+// 3.3 switch fall-through 写法
+auto sw_val = 2;
+auto sw_result = 0;
+switch (sw_val) {
+    case 1:
+        sw_result = 1;
+    case 2:
+        sw_result = 2;
+    case 3:
+        sw_result = 3;
+    default:
+        sw_result = 99;
+}
+
+// 3.4 空 switch / 无 case 的 switch
+switch (0) {
+    // 完全空
+}
+
+// 3.5 for 循环的各子句为空
+for (;;){
+    auto loop = 1;
+    break;
+}
+for (auto i = 0; i < 10; i++) {
+    auto inner = i;
+}
+
+// 3.6 for-each 遍历各种情况
+auto foreach_arr = [10, 20, 30];
+for (each elem in foreach_arr) {
+    auto val = elem;
+}
+
+// 3.7 while 空循环体
+while (false) {
+    // 永假循环
+}
+
+// 3.8 try-catch 不带 catch 只有 finally
+try {
+    auto risky = 1;
+} finally {
+    auto cleanup = 1;
+}
+
+// 3.9 try 只有 catch (无 finally)
+try {
+    auto risky = 2 / 0;
+} catch (e) {
+    auto caught = e;
+}
+
+// 3.10 try-catch-finally 全配齐
+try {
+    throw "bomb!";
+} catch (err) {
+    println(err);
+} finally {
+    auto always_runs = true;
+}
+
+// ==================== [4] 声明层攻击 ====================
+
+// 4.1 重复声明变量
+auto dup_var = 1;
+auto dup_var = 2;          // 重复声明 x
+
+// 4.2 函数主函数/函数 混合声明
+function 主函数() {
+    println("I'm weird");
+}
+main() {
+    主函数();
+}
+
+// 4.3 类继承自身 — 无限递归的类层级
+class SelfRef extends SelfRef {
+    constructor() {
+        auto self = this;
+    }
+}
+
+// 4.4 同名变量和函数
+auto same_name = 42;
+function same_name(x) {
+    return x * 2;
+}
+
+// 4.5 函数声明和调用参数数量不匹配
+function one_arg(a) { return a; }
+function three_args(a, b, c) { return a + b + c; }
+auto call_few = three_args(1);              // 缺少参数
+auto call_many = one_arg(1, 2, 3);         // 多余参数
+
+// 4.6 可变参数 ...
+function variadic(a, ...rest) {
+    return rest;
+}
+auto spread_test = variadic(1, 2, 3, 4, 5);
+
+// 4.7 枚举定义和空枚举
+enum Color { RED, GREEN, BLUE };
+enum EmptyFlags {};
+auto color = RED;
+
+// 4.8 命名空间嵌套
+namespace Outer {
+    auto outer_var = 1;
+    namespace Inner {
+        auto inner_var = 2;
+    }
+}
+
+// 4.9 导出导入
+export { x, y, z };
+
+// 4.10 @external 声明
+@external function 系统调用(a, b);
+
+// ==================== [5] 语义层攻击 ====================
+
+// 5.1 自引用 — 声明时可引用自身吗?
+auto self_ref = self_ref + 1;         // 经典自引用
+
+// 5.2 函数调用链 — 函数可作为一等公民?
+function addCreator(x) {
+    return function adder(y) {
+        return x + y;
+    };
+}
+auto add5 = addCreator(5);
+auto result_func = add5(10);
+
+// 5.3 高阶函数
+function apply(f, val) {
+    return f(val);
+}
+auto high_order = apply(add5, 20);
+
+// 5.4 函数返回函数调用链
+function compose() {
+    function inner() {
+        return 42;
+    }
+    return inner;
+}
+auto composed = compose()();           // compose() 返回 inner, 再调用 inner()
+
+// 5.5 闭包引用外部变量
+function makeCounter() {
+    auto count = 0;
+    return function() {
+        count += 1;
+        return count;
+    };
+}
+
+// 5.6 递归函数
+function factorial(n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+auto fact_10 = factorial(10);
+
+// 5.7 互相递归
+function isEven(n) {
+    if (n == 0) return true;
+    return isOdd(n - 1);
+}
+function isOdd(n) {
+    if (n == 0) return false;
+    return isEven(n - 1);
+}
+
+// 5.8 参数名/局部变量名冲突
+function param_shadow(x, x, x) {     // 重复参数名!
+    auto x = 100;                     // 局部变量覆盖参数
+    return x;
+}
+
+// 5.9 全局变量穿透到函数内部
+auto global_hidden = 999;
+function readGlobal() {
+    return global_hidden;            // 函数内访问外部变量
+}
+
+// 5.10 循环中的函数声明
+for (auto i = 0; i < 3; i++) {
+    function loopFunc() {
+        return i;                     // 引用循环变量
+    }
+}
+// auto capture_test = loopFunc();    // 调用哪个?
+
+// ==================== [6] 类型系统攻击 ====================
+
+// 6.1 null + undefined 的各种运算
+auto null_op_1 = null + 1 + 2;
+auto null_op_2 = undefined * 5;
+auto null_op_3 = null / 0;
+auto null_op_4 = null % 3;
+auto null_op_5 = -null;
+auto null_op_6 = !null;
+auto null_op_7 = ~null;              // 位运算 null!
+auto null_op_8 = null ** undefined;
+
+// 6.2 true/false 参与算术运算
+auto bool_math_1 = true + true;       // 应该是 2?
+auto bool_math_2 = false * 100;       // 应该是 0?
+auto bool_math_3 = true << 3;         // 应该是 8?
+auto bool_math_4 = -false;            // 应该是 -0?
+
+// 6.3 === 和 !== (严格比较)
+auto strict_eq_1 = 5 === 5;           // true
+auto strict_eq_2 = 5 === "5";         // false (不同类型)
+auto strict_eq_3 = 0 === false;       // false
+auto strict_eq_4 = null === null;     // true
+auto strict_eq_5 = undefined === null;// false
+auto strict_eq_6 = null !== undefined;// true
+
+// 6.4 == 和 != (宽松比较)
+auto loose_eq_1 = 5 == "5";           // 应该 true?
+auto loose_eq_2 = 0 == false;
+auto loose_eq_3 = null == undefined;
+
+// 6.5 类型混合比较
+auto cmp_mix_1 = "apple" < "banana";
+auto cmp_mix_2 = 10 < "5";            // 数字 vs 字符串
+auto cmp_mix_3 = true < 2;
+auto cmp_mix_4 = null < 0;
+
+// 6.6 字符串 + 数字 串联
+auto str_num_concat = "hello" + 123;
+auto num_str_concat = 456 + "world";
+
+// 6.7 数组/对象参与算术运算
+auto obj_arith = {a: 1} + {b: 2};
+auto arr_arith = [1, 2] * 3;
+
+// 6.8 typeof 类似功能 — 比较不同字面量类型
+auto type_hint = "typed";
+
+// 6.9 超大数字精度损失 — BigNum 在高精度下
+auto big_test_1 = 99999999999999999999999999999999999999999999999999 + 1;
+auto big_test_2 = 2 ** 256;                    // 超大幂
+auto big_test_3 = 12345678901234567890 * 98765432109876543210;
+
+// 6.10 负零/负大数
+auto neg_special = -0;
+auto neg_big = -99999999999999999999999999999999999999999;
+
+// ==================== [7] 数组/对象操作 ====================
+
+// 7.1 稀疏数组
+auto sparse_arr = [1, , 3, , , 6];
+auto sparse_len = sparse_arr.length;
+
+// 7.2 多维数组
+auto matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+auto matrix_val = matrix[1][2];
+
+// 7.3 数组展开
+auto spread_arr = [...[1, 2], 3, ...[4, 5]];
+
+// 7.4 对象属性简写 + 展开
+auto obj_short = a;
+auto full_obj = { obj_short, x: 1, y: 2 };
+
+// 7.5 对象方法定义
+auto method_obj = {
+    function greet(name) {
+        return "Hello, " + name;
+    }
+};
+// auto greeted = method_obj.greet("World");
+
+// 7.6 getter/setter (类方法)
+auto obj_with_getset = {
+    get val() { return 42; },
+    set val(v) { auto dummy = v; }
+};
+
+// 7.7 属性计算 — 等价于 obj["key"]
+auto idx_obj = full_obj.x;
+auto idx_arr = matrix[0][0];
+
+// ==================== [8] 内存/边界压力测试 ====================
+
+// 8.1 极度深嵌套括号 — 测试递归深度
+auto deepparen_10 = (((((((((42)))))))));
+
+// 8.2 非对称括号嵌套
+auto asym_paren = (((1 + 2) * 3 - 4) + (5 * (6 - 7)));
+
+// 8.3 多行复杂表达式
+auto complex_line = (a || b) && (c > d) ? (e + f * g) : (h - i / j) || (k == l) && (m != n);
+
+// 8.4 大规模串联字符串
+auto long_concat = "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j" +
+                   "k" + "l" + "m" + "n" + "o" + "p" + "q" + "r" + "s" + "t";
+
+// 8.5 大量变量声明
+auto v1 = 1; auto v2 = 2; auto v3 = 3; auto v4 = 4; auto v5 = 5;
+auto v6 = 6; auto v7 = 7; auto v8 = 8; auto v9 = 9; auto v10 = 10;
+
+// ==================== [9] 注释相关攻击 ====================
+
+// 9.1 注释在奇怪位置
+auto /**/ comment_in_expr = /* mid */ 1 /**/ + /* word */ 2;
+
+// 9.2 注释内含类代码
+/*
+function fake() {
+    auto trap = 1;
+    return "this is just a comment";
+}
+*/
+auto comment_ok = 1;
+
+// 9.3 未闭合的多行注释 — 最后一个 Token 故意不闭合
+/* this comment never ends... (如果编译器没正确处理会卡死)
+
+// 9.4 注释中含特殊字符
+// 中文注释：这是一段中文注释/*这不是注释*/这又是注释
+// // "字符串" '单引号' `backtick`
+// /**
+//   * JSDoc style
+//   * @param {number} x
+//   * @returns {number}
+// */
+
+// ==================== [10] 综合刁钻爆破 ====================
+
+// 10.1 关键字做标识符 — 如果语言允许某些keyword 作属性名
+auto if_val = 42;                  // if 不是关键字 if_val 是整体
+auto while_val = while_val + 1;
+
+// 10.2 中英混编主函数
+function 主函数() {                    // Chinese main
+    println("中文入口");
+}
+
+// 10.3 各种字面量的极限
+auto extreme_arr = [null, undefined, true, false, 0, 1, -1, "", "str", [], {}, function(){}];
+auto extreme_obj = {
+    a: null, b: undefined, c: true, d: false,
+    e: 0, f: 1.5, g: -1e10, h: "",
+    i: [1], j: {k: 1}
+};
+
+// 10.4 赋值给 this/super
+// auto self_assign = this;            // this 在全局作用域
+// auto super_assign = super;          // super 同理
+
+// 10.5 类继承和静态方法
+class Base {
+    static function factory() {
+        return new Base();
+    }
+}
+class Derived extends Base {
+    constructor() {
+        super();
+    }
+    static function create() {
+        return new Derived();
+    }
+}
+auto inst = new Derived();
+
+// 10.6 链式调用
+auto chain_obj = {
+    function value() {
+        return 42;
+    }
+};
+// auto chain_result = chain_obj.value();
+
+// 10.7 空文件式声明
+auto EOF_test = 1;

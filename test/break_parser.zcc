@@ -1,0 +1,50 @@
+// ============================================
+// 爆破测试 - 语法分析器 (Parser) 专项
+// ============================================
+
+// BLAST-11: 对象字面量用字符串做 key — parseObjectLiteral 只认 IDENTIFIER
+auto str_key_obj = { "abc": 123, "def": 456 };
+
+// BLAST-12: 无参数箭头函数 — () => expr 在 parsePrimary 的检测中存在缺陷
+auto arrow_empty = () => 42;
+// BLAST-12b: 单参数箭头
+auto arrow_one = x => x + 1;
+// BLAST-12c: 多参数箭头
+auto arrow_multi = (a, b) => a + b;
+
+// BLAST-13: 后置 ++/-- 作用在非左值 — parseCall 允许任意表达式
+auto a = 1;
+auto not_lvalue = (a + 1)++;     // 应该非法
+auto const_inc = 3++;            // 常数自增
+
+// BLAST-14: 运算符链混合优先级
+auto prec_test = 1 + 2 * 3 ** 4;
+auto bitwise_test = 1 << 2 >> 3 & 4 | 5 ^ ~6;
+
+// BLAST-15: 三元嵌套 — 右结合性
+auto ternary_mix = true ? 1 : false ? 2 : 3;
+
+// BLAST-16: 中英 keyword 混用 (如果 + else)
+如果 (true) {
+    auto x = 1;
+} else {
+    auto x = 2;
+}
+
+// BLAST-17: 变量声明链
+auto a2 = auto b2 = auto c2 = 42;
+
+// BLAST-18: 漏分号后的解析恢复
+auto missing_semi_1 = 1
+auto missing_semi_2 = 2;
+
+// BLAST-19: switch fall-through
+auto sw_result = 0;
+switch (2) {
+    case 1: sw_result = 1;
+    case 2: sw_result = 2;
+    default: sw_result = 99;
+}
+
+// BLAST-20: 深嵌套括号
+auto deep_paren = ((((((((42))))))));
