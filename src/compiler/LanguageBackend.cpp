@@ -5,8 +5,77 @@
 #include "Keywords.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <filesystem>
 
 namespace zcc {
+
+// ==================== GCC 路径自适应检测 ====================
+
+struct GCCInfo {
+    std::string gccExe;       // gcc.exe 完整路径
+    std::string libDir;       // lib/gcc/.../13.1.0/ 目录
+    std::string sysLibDir;    // x86_64-w64-mingw32/lib/ 目录
+    bool        valid = false;
+};
+
+static GCCInfo detectGCC() {
+    namespace fs = std::filesystem;
+    GCCInfo info;
+    
+    // 候选 GCC 路径列表 (按优先级)
+    std::vector<std::string> candidates = {
+        "C:/mingw1310/bin/gcc.exe",
+        "H:/工具/C++_Qt/Tools/mingw1310_64/bin/gcc.exe",
+        "C:/mingw64/bin/gcc.exe",
+        "C:/msys64/mingw64/bin/gcc.exe",
+    };
+    
+    for (const auto& path : candidates) {
+        if (!fs::exists(path)) continue;
+        
+        info.gccExe = path;
+        info.valid = true;
+        
+        fs::path gccPath(path);
+        fs::path mingwDir = gccPath.parent_path().parent_path();
+        
+        // 搜索 lib/gcc/x86_64-w64-mingw32/X.Y.Z/
+        fs::path libGcc = mingwDir / "lib" / "gcc";
+        if (fs::exists(libGcc)) {
+            for (auto& arch : fs::directory_iterator(libGcc)) {
+                if (!fs::is_directory(arch)) continue;
+                for (auto& ver : fs::directory_iterator(arch)) {
+                    if (!fs::is_directory(ver)) continue;
+                    info.libDir = ver.path().generic_string() + "/";
+                    break;  // 取第一个版本
+                }
+                break;  // 取第一个架构
+            }
+        }
+        
+        // 系统库: x86_64-w64-mingw32/lib/
+        fs::path sysLib = mingwDir / "x86_64-w64-mingw32" / "lib";
+        if (fs::exists(sysLib)) {
+            info.sysLibDir = sysLib.generic_string() + "/";
+        }
+        
+        return info;
+    }
+    
+    return info;
+}
+
+// 全局缓存, 只检测一次
+static GCCInfo g_cachedGCC;
+static bool g_gccDetected = false;
+
+static const GCCInfo& getGCC() {
+    if (!g_gccDetected) {
+        g_cachedGCC = detectGCC();
+        g_gccDetected = true;
+    }
+    return g_cachedGCC;
+}
 
 // ==================== 注册表实现 ====================
 
@@ -87,16 +156,35 @@ private:
 // ---- 编译器配置 ----
 
 std::optional<CompilerConfig> CBackendPlugin::getCompilerConfig() const {
+    const auto& gcc = getGCC();
+    if (!gcc.valid) {
+        // 回退到硬编码路径
+        return CompilerConfig{
+            "C:/mingw1310/bin/gcc.exe",
+            "C:/mingw1310/bin/gcc.exe {input} -o {output} "
+            "-BC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
+            "-BC:/mingw1310/x86_64-w64-mingw32/lib/ "
+            "-LC:/mingw1310/x86_64-w64-mingw32/lib/ "
+            "-LC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
+            "-lm -I. -I runtime -Wno-implicit-function-declaration",
+            {"-std=c11"},
+            false
+        };
+    }
+    
+    std::string templateCmd = gcc.gccExe + " {input} -o {output} ";
+    if (!gcc.libDir.empty())
+        templateCmd += "-B" + gcc.libDir + " ";
+    if (!gcc.sysLibDir.empty()) {
+        templateCmd += "-B" + gcc.sysLibDir + " ";
+        templateCmd += "-L" + gcc.sysLibDir + " ";
+    }
+    if (!gcc.libDir.empty())
+        templateCmd += "-L" + gcc.libDir + " ";
+    templateCmd += "-lm -I. -I runtime -Wno-implicit-function-declaration";
+    
     return CompilerConfig{
-        "C:/mingw1310/bin/gcc.exe",
-        "C:/mingw1310/bin/gcc.exe {input} -o {output} "
-        "-BC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
-        "-BC:/mingw1310/x86_64-w64-mingw32/lib/ "
-        "-LC:/mingw1310/x86_64-w64-mingw32/lib/ "
-        "-LC:/mingw1310/lib/gcc/x86_64-w64-mingw32/13.1.0/ "
-        "-lm -I. -I runtime -Wno-implicit-function-declaration",
-        {"-std=c11"},
-        false
+        gcc.gccExe, templateCmd, {"-std=c11"}, false
     };
 }
 
