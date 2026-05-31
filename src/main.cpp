@@ -11,6 +11,8 @@
 #include "IRGenerator.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
+#include "compiler/LanguageBackend.hpp"
+#include "compiler/CompilerDriver.hpp"
 
 using namespace zcc;
 
@@ -19,10 +21,11 @@ void printUsage(const char* programName) {
     std::cout << "Usage:\n";
     std::cout << "  " << programName << " <command> [options] <source>\n\n";
     std::cout << "Commands:\n";
-    std::cout << "  compile, c    Compile source to native executable\n";
-    std::cout << "  run, r        Compile and run immediately\n";
+    std::cout << "  compile, c    Compile source to bytecode (legacy)\n";
+    std::cout << "  build, b      Build source to native executable (IR → C → GCC)\n";
+    std::cout << "  run, r        Build and execute immediately\n";
     std::cout << "  ir            Generate ZCC-IR only\n";
-    std::cout << "  exec, x       Execute .ir file directly\n";
+    std::cout << "  languages     List available target languages\n";
     std::cout << "  backends      List available backends\n";
     std::cout << "  help, h       Show this help\n\n";
     std::cout << "Options:\n";
@@ -30,6 +33,7 @@ void printUsage(const char* programName) {
     std::cout << "  -O0, -O1, -O2, -O3  Optimization level\n";
     std::cout << "  -g            Generate debug info\n";
     std::cout << "  --target <triple>   Target platform\n";
+    std::cout << "  --lang <name>       Target language (c, cpp, ...)\n";
     std::cout << "  --backend <name>    Use specific backend\n";
     std::cout << "  --no-cache    Disable cache\n";
     std::cout << "  --keep-ir     Keep IR file after compilation\n\n";
@@ -73,6 +77,98 @@ void listBackends() {
             std::cout << "\n";
         }
     }
+}
+
+// ==================== 新命令: zcc build (P1) ====================
+
+int buildCommand(int argc, char* argv[], int argIndex) {
+    std::string inputFile, outputFile, targetLang = "c";
+    int optLevel = 1;
+    
+    for (int i = argIndex; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-o" && i + 1 < argc) outputFile = argv[++i];
+        else if (arg == "--lang" && i + 1 < argc) targetLang = argv[++i];
+        else if (arg == "-O0") optLevel = 0;
+        else if (arg == "-O1") optLevel = 1;
+        else if (arg == "-O2") optLevel = 2;
+        else if (arg == "-O3") optLevel = 3;
+        else if (arg[0] != '-') inputFile = arg;
+    }
+    
+    if (inputFile.empty()) {
+        std::cerr << "Error: No source file specified\n";
+        return 1;
+    }
+    
+    std::cout << "ZCC Compiler v0.2 (P1 Pipeline)\n";
+    std::cout << "Building: " << inputFile << "\n";
+    
+    CompilerDriver driver;
+    driver.setRuntimeDir(".");
+    
+    BuildRequest req;
+    req.sourceFile = inputFile;
+    req.outputFile = outputFile;
+    req.targetLanguage = targetLang;
+    req.optLevel = optLevel;
+    
+    auto result = driver.build(req);
+    
+    if (!result.success) {
+        std::cerr << "\nBuild failed!\n";
+        for (auto& e : result.errors) std::cerr << "  " << e << "\n";
+        return 1;
+    }
+    
+    std::cout << "\nBuild successful!\n";
+    std::cout << "Executable: " << result.outputFile << "\n";
+    return 0;
+}
+
+// ==================== 新命令: zcc run (P1) ====================
+
+int runCommand(int argc, char* argv[], int argIndex) {
+    // 先用 build 编译
+    int buildRet = buildCommand(argc, argv, argIndex);
+    if (buildRet != 0) return buildRet;
+    
+    // 找到输出文件名执行
+    std::string inputFile;
+    for (int i = argIndex; i < argc; i++) {
+        if (argv[i][0] != '-') { inputFile = argv[i]; break; }
+    }
+    
+    // 去掉 .zcc 后缀
+    auto dot = inputFile.rfind('.');
+    if (dot != std::string::npos) inputFile = inputFile.substr(0, dot);
+    
+    std::string exe = inputFile + (inputFile.find(".exe") != std::string::npos ? "" : ".exe");
+    
+    std::cout << "\nRunning: " << exe << "\n";
+    std::cout << "---\n";
+    int ret = std::system(exe.c_str());
+    std::cout << "---\nExit code: " << ret << "\n";
+    return 0;
+}
+
+// ==================== 新命令: zcc languages ====================
+
+int languagesCommand() {
+    CompilerDriver driver;
+    auto langs = driver.getAvailableLanguages();
+    
+    std::cout << "Available target languages:\n";
+    for (auto& lang : langs) {
+        auto* be = LanguageBackendRegistry::instance().getBackend(lang);
+        if (be) std::cout << "  " << lang << " (" << be->getDescription() << ")\n";
+    }
+    
+    std::cout << "\nTo add a new language:\n";
+    std::cout << "  1. Implement ILanguageBackend interface\n";
+    std::cout << "  2. Register with LanguageBackendRegistry\n";
+    std::cout << "  3. Use: zcc build --lang <name> file.zcc\n";
+    return 0;
 }
 
 int compileCommand(int argc, char* argv[], int argIndex) {
@@ -173,62 +269,6 @@ int compileCommand(int argc, char* argv[], int argIndex) {
     if (keepIR && backendName == "native") {
         std::cout << "IR file: " << outputFile << ".ir\n";
     }
-    
-    return 0;
-}
-
-int runCommand(int argc, char* argv[], int argIndex) {
-    if (argIndex >= argc) {
-        std::cerr << "Error: No source file specified\n";
-        return 1;
-    }
-    
-    std::string inputFile = argv[argIndex];
-    
-    // 检查文件扩展名
-    bool isIR = inputFile.size() > 3 && inputFile.substr(inputFile.size() - 3) == ".ir";
-    
-    if (isIR) {
-        // 直接运行 IR 文件
-        std::cout << "Running IR file: " << inputFile << "\n";
-        
-        // TODO: 加载并运行 IR
-        std::cerr << "Error: Running .ir files directly is not implemented yet\n";
-        return 1;
-    }
-    
-    // 编译并运行
-    std::cout << "Compiling and running: " << inputFile << "\n";
-    
-    // 临时输出文件
-    std::string tempOutput = inputFile + ".tmp";
-    
-    // 编译
-    CompilerOptions options;
-    options.outputFilename = tempOutput;
-    options.optimization = OptimizationLevel::O1;
-    options.backend = "native";
-    options.useCache = false;
-    
-    Compiler compiler(options);
-    auto compileResult = compiler.compileFile(inputFile);
-    
-    if (!compileResult.success) {
-        std::cerr << "\nCompilation failed!\n";
-        for (const auto& error : compileResult.errors) {
-            std::cerr << error << "\n";
-        }
-        return 1;
-    }
-    
-    std::cout << "Compilation successful, running...\n\n";
-    
-    // TODO: 运行编译后的程序
-    std::cerr << "Error: Running compiled programs is not implemented yet\n";
-    
-    // 清理临时文件
-    std::filesystem::remove(tempOutput);
-    std::filesystem::remove(tempOutput + ".ir");
     
     return 0;
 }
@@ -353,16 +393,24 @@ int main(int argc, char* argv[]) {
         return compileCommand(argc, argv, 2);
     }
     
+    if (command == "build" || command == "b") {
+        return buildCommand(argc, argv, 2);
+    }
+    
     if (command == "run" || command == "r") {
         return runCommand(argc, argv, 2);
     }
     
-    if (command == "exec" || command == "x") {
-        return execCommand(argc, argv, 2);
+    if (command == "languages") {
+        return languagesCommand();
     }
     
     if (command == "ir") {
         return irCommand(argc, argv, 2);
+    }
+    
+    if (command == "exec" || command == "x") {
+        return execCommand(argc, argv, 2);
     }
     
     std::cerr << "Unknown command: " << command << "\n";
