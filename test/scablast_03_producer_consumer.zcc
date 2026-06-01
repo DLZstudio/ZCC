@@ -1,0 +1,38 @@
+// ============================================
+// SCA爆破 #3: 跨模块数据共享模式
+// 模拟 Producer→Buffer→Consumer 的 SCA 场景
+// 
+// 在真实 SCA 中:
+//   Producer: ALLOC → 写入数据
+//   IPC:      传递内存句柄
+//   Consumer: LOAD → 读取数据 → FREE
+//
+// 测试是否能通过基本模式
+// ============================================
+
+namespace Producer {
+    function createData(size) {
+        auto arr = [];
+        for (auto i = 0; i < size; i++) {
+            arr[i] = i * 2;
+        }
+        return arr;
+    }
+}
+
+namespace Consumer {
+    function consumeData(data) {
+        auto sum = 0;
+        for (each value in data) {
+            sum += value;
+        }
+        return sum;
+    }
+}
+
+function main() {
+    auto raw = Producer.createData(10);
+    auto result = Consumer.consumeData(raw);
+
+    print(result);
+}

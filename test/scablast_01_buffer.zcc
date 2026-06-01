@@ -1,0 +1,32 @@
+// ============================================
+// SCA爆破 #1: 大缓冲区分配 — 模拟图像处理
+// 测试 ALLOC/ALLOCA/FREE 的内存管理能力
+// 
+// SCA 风险: ALLOCA 在 CBackend 中是注释桩!
+//           ALLOC→malloc ✅ | FREE→free ✅
+// ============================================
+
+function processBuffer(size) {
+    auto sum = 0;
+    for (auto i = 0; i < size; i++) {
+        sum += i;
+    }
+    return sum;
+}
+
+function main() {
+    // 模拟 SCA 场景: 大缓冲区处理
+    auto result = processBuffer(1024);
+
+    // 模拟 SCA: 多生产者-消费者模式需要共享内存
+    auto data = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    auto sum = 0;
+
+    for (auto i = 0; i < 10; i++) {
+        sum += data[i];
+    }
+
+    // 输出结果 — SCA 各模块交换数据后汇总
+    print(result);
+    print(sum);
+}

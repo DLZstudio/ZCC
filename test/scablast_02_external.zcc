@@ -1,0 +1,19 @@
+// ============================================
+// SCA爆破 #2: 模块导入 + 虚空接口混合
+// 测试 import 语句 + @external 声明
+// 
+// SCA 风险: ImportDecl IR 处理是空桩 (visitImportDecl 空函数)
+// ============================================
+
+// 主模块: 调用外部函数并通过虚接口声明
+@external function remoteProcedure(arg1, arg2);
+
+function main() {
+    // 虚空接口调用
+    auto result = remoteProcedure(10, 20);
+
+    // 本地计算
+    auto local = result * 2;
+
+    print(local);
+}
