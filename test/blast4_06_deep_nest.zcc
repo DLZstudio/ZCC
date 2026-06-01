@@ -1,0 +1,24 @@
+// ============================================
+// 第四轮爆破 #6: 深度嵌套 + 位运算
+// ============================================
+
+function main() {
+    auto x = 0;
+
+    // 深度嵌套 if
+    if (true) {
+        auto inner1 = 1;
+        if (inner1 > 0) {
+            auto inner2 = 2;
+            x = inner1 + inner2;
+        }
+    }
+
+    // 位运算
+    auto bit_val = x & 3 | 4 ^ 2;
+    auto shift_val = x << 1 >> 2;
+
+    print(x);
+    print(bit_val);
+    print(shift_val);
+}

@@ -1,0 +1,16 @@
+// ============================================
+// 第四轮爆破 #5: try-catch + 数组操作 + return
+// ============================================
+
+function main() {
+    auto arr = [1, 2, 3];
+
+    try {
+        arr[3] = 4;
+    } catch (e) {
+        print("Error caught");
+    }
+
+    print(arr[0]);
+    print(arr[arr[0]]);
+}

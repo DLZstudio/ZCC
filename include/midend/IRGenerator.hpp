@@ -306,6 +306,7 @@ inline void IRGenerator::generateStatement(StmtPtr stmt) {
     else if (auto* s = dynamic_cast<ThrowStmt*>(stmt.get()))     visitThrowStmt(s);
     else if (auto* s = dynamic_cast<TryStmt*>(stmt.get()))       visitTryStmt(s);
     else if (auto* s = dynamic_cast<SwitchStmt*>(stmt.get()))    visitSwitchStmt(s);
+    else if (auto* s = dynamic_cast<VariableDecl*>(stmt.get()))  visitVariableDecl(s);
 }
 
 // AST 访问实现
@@ -403,11 +404,12 @@ inline void IRGenerator::visitFunctionDecl(FunctionDecl* decl) {
         declareVariable(param, paramID);
     }
     
-    // 生成函数体
+    // 生成函数体 — 直接在函数作用域中处理，避免 visitBlockStmt 的额外 enterScope/leaveScope
     if (decl->body) {
         currentBlock_ = func->createBlock("entry");
-        auto bodyStmt = std::make_shared<BlockStmt>(*decl->body);
-        generateStatement(bodyStmt);
+        for (auto& stmt : decl->body->statements) {
+            generateStatement(stmt);
+        }
         
         // 如果没有显式返回，添加隐式返回
         if (!currentBlock_->isTerminated()) {
@@ -664,6 +666,8 @@ inline void IRGenerator::visitUnaryExpr(UnaryExpr* expr) {
         case TokenType::MINUS: opcode = ZCCIROpcode::NEG; break;
         case TokenType::BANG: opcode = ZCCIROpcode::NOT; break;
         case TokenType::TILDE: opcode = ZCCIROpcode::NOT; break;
+        case TokenType::PLUS_PLUS: opcode = ZCCIROpcode::INC; break;
+        case TokenType::MINUS_MINUS: opcode = ZCCIROpcode::DEC; break;
         default:
             error(expr->location, "Unknown unary operator");
             return;

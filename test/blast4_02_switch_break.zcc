@@ -1,0 +1,17 @@
+// ============================================
+// 第四轮爆破 #2: switch-break 正确性
+// switch 中的 break 是合法操作，不是"循环外break"
+// ============================================
+
+function main() {
+    auto val = 2;
+    auto result = 1;
+
+    switch (val) {
+        case 1: result = 10; break;
+        case 2: result = 20; break;
+        default: result = 0;
+    }
+
+    print(result);
+}
