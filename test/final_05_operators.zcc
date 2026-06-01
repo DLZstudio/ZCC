@@ -1,0 +1,28 @@
+// ============================================
+// 终爆 #5: 全运算符组合压力
+// 算术 + 位 + 比较 + 逻辑混合
+// ============================================
+
+function main() {
+    auto a = 10;
+    auto b = 3;
+
+    // 算术链
+    auto r1 = a + b * a - b / a;
+
+    // 比较链
+    auto cmp1 = a > b == true;
+    auto cmp2 = !(a < b) && (b != 0);
+    auto cmp3 = (a == 10) || (b == 5);
+
+    // 三元嵌套
+    auto max = a > b ? a : b;
+    auto sign = max > 0 ? (max > 10 ? "big" : "small") : "zero";
+
+    // 位 + 比较
+    auto bit_cmp = (a & 1) == 1;
+
+    print(r1);
+    print(max);
+    print(sign);
+}

@@ -1,0 +1,30 @@
+// ============================================
+// 终爆 #7: 剩余参数 + 箭头 + 闭包综合
+// ============================================
+
+function sum_all(...nums) {
+    auto total = 0;
+    for (each n in nums) {
+        total += n;
+    }
+    return total;
+}
+
+function main() {
+    auto result1 = sum_all(1, 3, 5);
+    auto result2 = sum_all(2, 4, 6, 8);
+
+    // 箭头 + 闭包
+    auto make_adder = x => {
+        return function(y) {
+            return x + y;
+        };
+    };
+
+    auto add10 = make_adder(10);
+    auto r3 = add10(result1);
+
+    print(result1);
+    print(result2);
+    print(r3);
+}

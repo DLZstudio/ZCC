@@ -1,0 +1,24 @@
+// ============================================
+// 终爆 #6: namespace + try-catch + return
+// ============================================
+
+namespace Calc {
+    auto BASE = 100;
+
+    function add(x, y) {
+        return x + y;
+    }
+}
+
+function main() {
+    auto total = Calc.BASE;
+    total = Calc.add(total, 50);
+
+    try {
+        total = Calc.add(total, 999);
+    } catch (e) {
+        print("Error in add");
+    }
+
+    print(total);
+}

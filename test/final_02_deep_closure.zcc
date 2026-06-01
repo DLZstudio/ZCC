@@ -1,0 +1,21 @@
+// ============================================
+// 终爆 #2: 深度嵌套作用域 + 闭包链
+// ============================================
+
+function main() {
+    function outer(x) {
+        function inner(y) {
+            return x + y;
+        }
+        return inner(x * 2);
+    }
+
+    auto v1 = outer(5);
+    auto v2 = outer(10);
+
+    if (v1 > v2) {
+        print("v1 bigger");
+    } else {
+        print("v2 bigger");
+    }
+}

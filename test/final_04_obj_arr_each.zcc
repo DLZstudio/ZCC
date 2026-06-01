@@ -1,0 +1,30 @@
+// ============================================
+// 终爆 #4: 对象 + 数组 + 字符串键 + for-each
+// ============================================
+
+function main() {
+    // 对象字面量 (标识符键)
+    auto point = { x: 10, y: 20 };
+
+    // 对象字面量 (字符串键 — 已修复)
+    auto config = {
+        "name": "ZCC",
+        "version": "0.2"
+    };
+
+    // 数组
+    auto items = [point.x, point.y, -1, 0, 1];
+
+    // for-each 遍历 (修复后两种语法都应支持)
+    for (each item in items) {
+        print(item);
+    }
+
+    // for-each 带括号
+    auto sum = 0;
+    for (each n in items) {
+        sum += n;
+    }
+
+    print(sum);
+}

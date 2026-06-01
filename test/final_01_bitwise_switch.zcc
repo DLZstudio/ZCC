@@ -1,0 +1,29 @@
+// ============================================
+// 终爆 #1: 位运算 + switch-break + 嵌套变量
+// 测试本轮最新修复的组合能力
+// ============================================
+
+function main() {
+    auto flags = 5;
+    auto mask = 3;
+
+    // 位运算全组合
+    auto and_val = flags & mask;
+    auto or_val = flags | mask;
+    auto xor_val = flags ^ mask;
+    auto shl_val = flags << 1;
+    auto shr_val = flags >> 1;
+
+    // switch + break 不应报错
+    auto result = 0;
+    switch (flags) {
+        case 1: result = and_val; break;
+        case 3: result = or_val; break;
+        case 5: result = xor_val; break;
+        default: result = -1;
+    }
+
+    print(result);
+    print(shl_val);
+    print(shr_val);
+}

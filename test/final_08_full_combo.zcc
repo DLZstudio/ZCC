@@ -1,0 +1,59 @@
+// ============================================
+// 终爆 #8: 综合全功能压力测试
+// 尽可能多的修复功能在一个程序中
+// ============================================
+
+函数 计算(a, b) {
+    返回 a + b;
+}
+
+function isPositive(n) {
+    if (n > 0) {
+        return true;
+    }
+    return false;
+}
+
+function main() {
+    // 变量声明 + 浮点数
+    auto pi = 3.14159;
+    auto half = .5;
+
+    // 位运算
+    auto flag = 1 | 2 | 4;
+    flag = flag << 1;
+
+    // 条件 + 自增减
+    auto x = 0;
+    if (isPositive(1)) {
+        ++x;
+        x++;
+    }
+
+    // while
+    while (x < 5) {
+        ++x;
+    }
+
+    // for-each
+    auto values = [1, 2, 3];
+    for (each v in values) {
+        x += v;
+    }
+
+    // await (no, let me use regular calc)
+    auto y = 计算(x, 5);
+
+    // ternary
+    auto msg = y > 10 ? "large" : "small";
+
+    // try-catch
+    try {
+        y = 计算(y, 0);
+    } catch (e) {
+        y = -1;
+    }
+
+    打印(y);
+    打印(msg);
+}
