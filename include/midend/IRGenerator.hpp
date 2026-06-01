@@ -30,6 +30,7 @@ struct ControlFlowInfo {
     ZCCIRBlock* loopStart = nullptr;
     ZCCIRBlock* loopEnd = nullptr;
     ZCCIRBlock* functionEnd = nullptr;
+    ZCCIRBlock* switchExit = nullptr;  // switch 退出目标
 };
 
 // IR 生成器类
@@ -398,10 +399,15 @@ inline void IRGenerator::visitFunctionDecl(FunctionDecl* decl) {
     // 声明参数 — 创建 ARGUMENT 值并注册到映射表
     for (size_t i = 0; i < decl->parameters.size(); ++i) {
         const auto& param = decl->parameters[i];
+        std::string paramName = param;
+        // 去除 ... 前缀 (剩余参数)
+        if (!paramName.empty() && paramName[0] == '.') {
+            paramName = paramName.substr(3);  // 跳过 "..."
+        }
         ZCCIRValue::ID paramID = nextValueID_++;
         values_[paramID] = std::make_shared<ZCCIRValue>(
             ZCCIRValueKind::ARGUMENT, getAny(), paramID);
-        declareVariable(param, paramID);
+        declareVariable(paramName, paramID);
     }
     
     // 生成函数体 — 直接在函数作用域中处理，避免 visitBlockStmt 的额外 enterScope/leaveScope
@@ -574,6 +580,10 @@ inline void IRGenerator::visitReturnStmt(ReturnStmt* stmt) {
 }
 
 inline void IRGenerator::visitBreakStmt(BreakStmt* stmt) {
+    if (controlFlow_.switchExit) {
+        emitJump(controlFlow_.switchExit);
+        return;
+    }
     if (!controlFlow_.loopEnd) {
         error(stmt->location, "break statement outside of loop");
         return;
@@ -649,6 +659,11 @@ inline void IRGenerator::visitBinaryExpr(BinaryExpr* expr) {
         case TokenType::GREATER_EQUAL: opcode = ZCCIROpcode::CMP_GE; break;
         case TokenType::AMPERSAND_AMPERSAND: opcode = ZCCIROpcode::AND; break;
         case TokenType::PIPE_PIPE: opcode = ZCCIROpcode::OR; break;
+        case TokenType::AMPERSAND: opcode = ZCCIROpcode::AND; break;
+        case TokenType::PIPE: opcode = ZCCIROpcode::OR; break;
+        case TokenType::CARET: opcode = ZCCIROpcode::XOR; break;
+        case TokenType::LESS_LESS: opcode = ZCCIROpcode::SHL; break;
+        case TokenType::GREATER_GREATER: opcode = ZCCIROpcode::SHR; break;
         default:
             error(expr->location, "Unknown binary operator");
             return;
@@ -875,6 +890,10 @@ inline void IRGenerator::visitSwitchStmt(SwitchStmt* stmt) {
     auto* endBlock = currentFunction_->createBlock("switch.end");
     ZCCIRBlock* defaultBlock = endBlock;
     
+    // 设置 switch 上下文以支持 break
+    auto* savedSwitchExit = controlFlow_.switchExit;
+    controlFlow_.switchExit = endBlock;
+    
     // 为每个 case 创建块并收集
     std::vector<ZCCIRBlock*> caseBlocks;
     std::vector<ZCCIRValue::ID> caseValues;
@@ -919,6 +938,7 @@ inline void IRGenerator::visitSwitchStmt(SwitchStmt* stmt) {
     }
     
     currentBlock_ = endBlock;
+    controlFlow_.switchExit = savedSwitchExit;
 }
 
 // 成员访问 obj.prop
