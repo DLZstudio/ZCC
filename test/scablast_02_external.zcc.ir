@@ -1,9 +1,0 @@
-.version 1.0
-.module "test/scablast_02_external.zcc"
-.source "test/scablast_02_external.zcc"
-
-.func i64 @main() {
-entry:
-  ret %0
-}
-
