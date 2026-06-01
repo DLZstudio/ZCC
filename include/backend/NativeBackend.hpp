@@ -316,7 +316,9 @@ private:
         
     private:
         InterpreterState& state_;
-        std::unordered_map<uint32_t, RuntimeValue> reg_;  // 指令结果寄存器
+        std::unordered_map<uint32_t, RuntimeValue> reg_;     // 指令结果寄存器
+        std::unordered_map<int64_t, std::vector<uint8_t>> allocTable_; // 堆句柄表
+        int64_t nextHandle_ = 1;
     };
     
     // 生成自包含的可执行文件（包含解释器和字节码）

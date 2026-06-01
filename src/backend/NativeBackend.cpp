@@ -467,30 +467,62 @@ RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstructi
             
         // === 内存操作 ===
         case ZCCIROpcode::LOAD: {
-            // STORE 把值存入 reg_[变量ID]，LOAD 取出
             auto& operand = instr.getOperand(0);
             auto valPtr = operand.getValue();
-            if (valPtr) {
-                auto it = reg_.find(valPtr->getID());
-                if (it != reg_.end()) return it->second;
+            if (!valPtr) return RuntimeValue();
+            
+            auto it = reg_.find(valPtr->getID());
+            if (it == reg_.end()) return RuntimeValue();
+            
+            // 如果是堆句柄 → 从 allocTable 读取偏移0处的 int64_t
+            RuntimeValue& rv = it->second;
+            if (rv.isNumber()) {
+                int64_t h = static_cast<int64_t>(rv.asNumber());
+                auto at = allocTable_.find(h);
+                if (at != allocTable_.end() && at->second.size() >= 8) {
+                    int64_t v = 0;
+                    memcpy(&v, at->second.data(), 8);
+                    return RuntimeValue(v);
+                }
             }
-            return RuntimeValue();
+            return rv;
         }
         case ZCCIROpcode::STORE: {
-            // 将操作数1的值存入操作数0指向的变量
             auto v = op1();
             auto& operand = instr.getOperand(0);
             auto valPtr = operand.getValue();
-            if (valPtr) {
-                reg_[valPtr->getID()] = v;
+            if (!valPtr) return v;
+            
+            auto it = reg_.find(valPtr->getID());
+            if (it != reg_.end()) {
+                RuntimeValue& rv = it->second;
+                // 如果目标变量存的是一个堆句柄 → 写入 buffer
+                if (rv.isNumber()) {
+                    int64_t h = static_cast<int64_t>(rv.asNumber());
+                    auto at = allocTable_.find(h);
+                    if (at != allocTable_.end() && at->second.size() >= 8) {
+                        int64_t w = static_cast<int64_t>(v.asNumber());
+                        memcpy(at->second.data(), &w, 8);
+                        return v;
+                    }
+                }
             }
+            reg_[valPtr->getID()] = v;
             return v;
         }
         case ZCCIROpcode::ALLOCA:
-        case ZCCIROpcode::ALLOC:
-            return RuntimeValue(int64_t(0));  // 简化: 返回哨兵指针
-        case ZCCIROpcode::FREE:
+        case ZCCIROpcode::ALLOC: {
+            size_t sz = static_cast<size_t>(op0().asNumber());
+            if (sz == 0) sz = 8;  // 最小 8 字节
+            int64_t handle = nextHandle_++;
+            allocTable_[handle] = std::vector<uint8_t>(sz, 0);
+            return RuntimeValue(handle);
+        }
+        case ZCCIROpcode::FREE: {
+            int64_t h = static_cast<int64_t>(op0().asNumber());
+            allocTable_.erase(h);
             return RuntimeValue();
+        }
             
         // === 自增/自减 ===
         case ZCCIROpcode::INC: {
