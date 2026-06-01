@@ -1,0 +1,32 @@
+// ============================================
+// IR爆破 #8: return + break + continue 组合
+// 测试控制流终结指令 (RET, JMP loops)
+// ============================================
+
+function classify(n) {
+    if (n > 0) {
+        return 1;
+    }
+    if (n < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+function main() {
+    auto arr = [-5, 0, 3, -2, 7];
+    auto pos = 0;
+    auto neg = 0;
+
+    for (auto i = 0; i < 5; i++) {
+        auto r = classify(arr[i]);
+        if (r > 0) {
+            pos++;
+        } else if (r < 0) {
+            neg++;
+        }
+    }
+
+    print(pos);
+    print(neg);
+}

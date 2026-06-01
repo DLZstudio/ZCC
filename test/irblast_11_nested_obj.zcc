@@ -1,0 +1,26 @@
+// ============================================
+// IR爆破 #11: 对象 + 数组混合嵌套
+// 测试 OBJECT_GET + ARRAY_GET 组合链
+// ============================================
+
+function main() {
+    auto data = {
+        name: "ZCC",
+        versions: [1, 2, 3],
+        meta: {
+            author: "dev",
+            year: 2026
+        }
+    };
+
+    // 深度访问
+    auto v = data.versions[1];
+    auto author = data.meta.author;
+    auto year = data.meta.year;
+
+    // 修改嵌套
+    data.versions[0] = 10;
+
+    print(v);
+    print(author);
+}

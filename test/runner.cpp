@@ -107,6 +107,15 @@ int testFile(const std::string& filepath) {
         }
     } else {
         std::string irText = irModule->toText();
+        // 保存 IR 输出以便审计
+        if (!irText.empty()) {
+            std::string irPath = filepath + ".ir";
+            std::ofstream irFile(irPath);
+            if (irFile) {
+                irFile << irText;
+                irFile.close();
+            }
+        }
         std::cout << "\n  IR generated: " << irText.size() << " bytes\n";
         std::cout << "  IR Lines: " << (std::count(irText.begin(), irText.end(), '\n') + 1) << "\n";
     }

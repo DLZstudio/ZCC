@@ -1,0 +1,40 @@
+// ============================================
+// IR爆破 #12: 终极 IR 压力 — 所有 IR 操作码
+// bit/arithmetic/cmp/str/array/object/control-flow
+// ============================================
+
+function compute(x, y) {
+    // 算术
+    auto a = x + y;
+    auto b = x - y;
+    auto c = x * y;
+    auto d = x / y;
+    auto m = x % y;
+    auto p = x ** 2;
+
+    // 位运算
+    auto bit = (x & y) | (x ^ y);
+
+    // 比较
+    if (a > b && c != 0 || !(d < 1)) {
+        bit = bit << 1;
+    }
+
+    return a + b + c + p + bit + m;
+}
+
+function main() {
+    auto r = compute(10, 3);
+
+    // 数组/对象
+    auto arr = [r, r*2, r*3];
+    auto obj = { sum: r, arr: arr };
+
+    for (auto i = 0; i < 3; i++) {
+        obj.arr[i] = obj.arr[i] + i;
+    }
+
+    print(obj.arr[0]);
+    print(obj.arr[2]);
+    print(obj.sum);
+}

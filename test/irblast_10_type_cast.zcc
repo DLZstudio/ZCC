@@ -1,0 +1,25 @@
+// ============================================
+// IR爆破 #10: 类型边界 — bool + null + undefined
+// 测试类型强制和 IR 类型推断
+// ============================================
+
+function main() {
+    // true/false 参与算术 (IR: 需要类型转换)
+    auto b1 = true + false;
+    auto b2 = true * 5;
+    auto b3 = false / 1;
+
+    // null + undefined 混合
+    auto n1 = null + 1;
+    auto n2 = undefined + 2;
+
+    // === 严格比较
+    auto c1 = 5 === 5;
+    auto c2 = 5 === "5";
+    auto c3 = null === null;
+    auto c4 = undefined === null;
+
+    print(b1);
+    print(c1);
+    print(c2);
+}

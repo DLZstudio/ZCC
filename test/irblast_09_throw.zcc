@@ -1,0 +1,28 @@
+// ============================================
+// IR爆破 #9: throw 在深层作用域 — THROW 操作码
+// ============================================
+
+function danger(n) {
+    if (n == 0) {
+        throw "division by zero";
+    }
+    return 100 / n;
+}
+
+function main() {
+    auto result = 0;
+
+    try {
+        result = danger(0);
+    } catch (e) {
+        result = -1;
+    }
+
+    try {
+        result = danger(5);
+    } catch (e) {
+        result = -2;
+    }
+
+    print(result);
+}
