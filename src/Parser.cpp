@@ -1379,7 +1379,21 @@ DeclPtr Parser::parseFromImportDeclaration() {
 DeclPtr Parser::parseExternalDeclaration() {
     DeclPtr declaration;
     if (match(TokenType::FUNCTION) || match(TokenType::FUNC)) {
-        declaration = parseFunctionDeclaration();
+        // @external 声明: 只解析签名，不要求 body
+        Token nameToken = expect(TokenType::IDENTIFIER, "Expected function name");
+        expect(TokenType::LEFT_PAREN, "Expected '(' after function name");
+        std::vector<std::string> params;
+        if (!check(TokenType::RIGHT_PAREN)) {
+            do {
+                if (check(TokenType::IDENTIFIER)) {
+                    params.push_back(advance().lexeme);
+                }
+            } while (match(TokenType::COMMA));
+        }
+        expect(TokenType::RIGHT_PAREN, "Expected ')' after parameters");
+        expect(TokenType::SEMICOLON, "Expected ';' after @external declaration");
+        return std::make_shared<ExternalDecl>(nameToken.lexeme, params, "auto", 
+                                              SourceLocation("",0,0,0));
     } else if (match(TokenType::AUTO)) {
         declaration = parseVariableDeclaration(false);
     } else {

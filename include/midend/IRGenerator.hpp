@@ -797,6 +797,30 @@ inline void IRGenerator::visitAssignExpr(AssignExpr* expr) {
 }
 
 inline void IRGenerator::visitCallExpr(CallExpr* expr) {
+    // 检测 callee 是否为内置内存操作
+    std::string calleeName;
+    if (auto id = dynamic_cast<IdentifierExpr*>(expr->callee.get())) {
+        calleeName = id->name;
+    }
+    
+    // alloc(n) → ALLOC
+    if (calleeName == "alloc" || calleeName == "分配") {
+        std::vector<ZCCIRValue::ID> args;
+        for (auto& arg : expr->arguments) args.push_back(generateExpression(arg));
+        ZCCIRValue::ID size = args.empty() ? emitConstant(int64_t(0), getI64()) : args[0];
+        currentExprResult_ = emitInstruction(ZCCIROpcode::ALLOC, {size});
+        return;
+    }
+    
+    // free(h) → FREE
+    if (calleeName == "free" || calleeName == "释放") {
+        std::vector<ZCCIRValue::ID> args;
+        for (auto& arg : expr->arguments) args.push_back(generateExpression(arg));
+        if (!args.empty()) emitInstruction(ZCCIROpcode::FREE, {args[0]});
+        currentExprResult_ = 0;
+        return;
+    }
+    
     // 生成参数
     std::vector<ZCCIRValue::ID> args;
     for (auto& arg : expr->arguments) {
@@ -1205,7 +1229,8 @@ inline void IRGenerator::visitIdentifierExpr(IdentifierExpr* expr) {
     
     // 内置 I/O (print/打印, input/输入) — 外部函数引用
     if (expr->name == "print" || expr->name == "println" ||
-        expr->name == "input" || expr->name == "打印" || expr->name == "输入") {
+        expr->name == "input" || expr->name == "打印" || expr->name == "输入" ||
+        expr->name == "alloc" || expr->name == "free" || expr->name == "分配" || expr->name == "释放") {
         currentExprResult_ = 0;
         return;
     }
