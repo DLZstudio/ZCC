@@ -41,7 +41,7 @@ zcc.exe <command> [options] <source>
 | `ir` | — | `irCommand()` | P0 已完成 |
 | `languages` | — | `languagesCommand()` | 正常 |
 | `backends` | — | `listBackends()` | 正常 |
-| `exec` | `x` | `execCommand()` | 未实现 |
+| `exec` | `x` | `execCommand()` | 桩 (IR Interpreter 已就绪) |
 
 丢弃规则:
 - 无命令或无参数 → 打印 help + 退出码 0 (无参数用 help，空命令用 usage)
@@ -259,7 +259,7 @@ Error: Executing .ir files is not implemented yet
 [退出码: 1]
 ```
 
-**状态**: 纯桩代码。P1 IR Interpreter 将填充此命令。
+**状态**: IR Interpreter 引擎已完成 (63/66 opcode + CFG 跳转)，但 `execCommand()` 未连接 NativeBackend::runModule() 入口。
 
 ---
 
