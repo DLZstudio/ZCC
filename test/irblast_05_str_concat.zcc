@@ -1,0 +1,21 @@
+// ============================================
+// IR爆破 #5: 字符串 + 数字 混合 — STR_CONCAT / 类型转换
+// 测试类型强制和 IR 操作码选择
+// ============================================
+
+function main() {
+    auto s = "ZCC";
+    auto v = 0;
+    auto v2 = 2;
+
+    // 字符串连接
+    auto t = s + " version ";
+    auto u = t + v2;
+
+    // 多次连接
+    auto final = u + ".";
+    auto final2 = final + " ready";
+
+    print(final);
+    print(final2);
+}

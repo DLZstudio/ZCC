@@ -1,0 +1,26 @@
+// ============================================
+// IR爆破 #4: 深度控制流 — 多层 if-else 块
+// 测试 JMP/JMP_IF/JMP_IF_NOT 块拓扑
+// ============================================
+
+function main() {
+    auto score = 75;
+
+    if (score >= 90) {
+        print("A");
+    } else {
+        if (score >= 80) {
+            print("B");
+        } else {
+            if (score >= 70) {
+                print("C");
+            } else {
+                if (score >= 60) {
+                    print("D");
+                } else {
+                    print("F");
+                }
+            }
+        }
+    }
+}

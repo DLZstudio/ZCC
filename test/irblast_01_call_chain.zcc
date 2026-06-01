@@ -1,0 +1,18 @@
+// ============================================
+// IR爆破 #1: 深度调用链 — 压力测试 CALL + RET
+// 测试 IR 函数调用栈的正确性
+// ============================================
+
+function add10(n) { return n + 10; }
+function mul2(n) { return n * 2; }
+function sub5(n) { return n - 5; }
+function div2(n) { return n / 2; }
+
+function main() {
+    auto x = 42;
+    auto r = add10(x);
+    r = mul2(r);
+    r = sub5(r);
+    r = div2(r);
+    print(r);
+}
