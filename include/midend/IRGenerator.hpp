@@ -308,6 +308,48 @@ inline void IRGenerator::generateStatement(StmtPtr stmt) {
     else if (auto* s = dynamic_cast<TryStmt*>(stmt.get()))       visitTryStmt(s);
     else if (auto* s = dynamic_cast<SwitchStmt*>(stmt.get()))    visitSwitchStmt(s);
     else if (auto* s = dynamic_cast<VariableDecl*>(stmt.get()))  visitVariableDecl(s);
+    else if (auto* s = dynamic_cast<FunctionDecl*>(stmt.get()))  {
+        // 嵌套函数: 注册函数名到当前作用域并处理函数定义
+        // 先保存状态
+        auto* savedFunc = currentFunction_;
+        auto* savedBlock = currentBlock_;
+        
+        // 注册函数名供周围代码引用
+        ZCCIRValue::ID funcRef = nextValueID_++;
+        values_[funcRef] = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::LOCAL, getAny(), funcRef);
+        declareVariable(s->name, funcRef);
+        
+        // 在模块级创建嵌套函数并使用独立上下文处理
+        std::vector<std::pair<std::string, ZCCTypePtr>> fwdParams;
+        for (const auto& p : s->parameters) fwdParams.push_back({p, getAny()});
+        auto* func = module_->createFunction(s->name, getAny(), std::move(fwdParams));
+        
+        // 处理函数体
+        currentFunction_ = func;
+        enterScope(true);
+        for (size_t pi = 0; pi < s->parameters.size(); ++pi) {
+            const auto& param = s->parameters[pi];
+            std::string paramName = param;
+            if (!paramName.empty() && paramName[0] == '.') paramName = paramName.substr(3);
+            ZCCIRValue::ID paramID = nextValueID_++;
+            values_[paramID] = std::make_shared<ZCCIRValue>(
+                ZCCIRValueKind::ARGUMENT, getAny(), paramID);
+            declareVariable(paramName, paramID);
+        }
+        if (s->body) {
+            currentBlock_ = func->createBlock("entry");
+            for (auto& ns : s->body->statements)
+                generateStatement(ns);
+            if (!currentBlock_->isTerminated())
+                emitTerminator(ZCCIROpcode::RET, {});
+        }
+        leaveScope();
+        
+        // 恢复状态
+        currentFunction_ = savedFunc;
+        currentBlock_ = savedBlock;
+    }
 }
 
 // AST 访问实现
@@ -315,6 +357,9 @@ inline void IRGenerator::visitProgram(Program* program) {
     module_ = std::make_unique<ZCCIRModule>(config_.moduleName);
     module_->getMetadata().sourceFile = program->sourceFilename;
     module_->getMetadata().target = config_.target;
+    
+    // 创建全局作用域
+    enterScope(false);
     
     // 检查是否有顶层函数声明
     bool hasExplicitMain = false;
@@ -365,10 +410,21 @@ inline void IRGenerator::visitProgram(Program* program) {
                 for (const auto& p : fd->parameters) fwdParams.push_back({p, getAny()});
                 auto* func = module_->createFunction(fd->name, getAny(), std::move(fwdParams));
                 functionCache_[fd->name] = func;
+            } else if (auto* ns = dynamic_cast<NamespaceDecl*>(decl.get())) {
+                // 注册命名空间成员 (如 Math.PI, Math.square)
+                for (auto& m : ns->members) {
+                    if (auto* fd = dynamic_cast<FunctionDecl*>(m.get())) {
+                        std::string qname = ns->name + "." + fd->name;
+                        std::vector<std::pair<std::string, ZCCTypePtr>> fwdParams;
+                        for (const auto& p : fd->parameters) fwdParams.push_back({p, getAny()});
+                        auto* func = module_->createFunction(qname, getAny(), std::move(fwdParams));
+                        functionCache_[qname] = func;
+                    }
+                }
             }
         }
         
-        // 然后访问每个声明的体
+        // 然后访问每个声明的体 (先处理命名空间变量)
         for (auto& decl : program->declarations) {
             if (auto* fd = dynamic_cast<FunctionDecl*>(decl.get()))
                 visitFunctionDecl(fd);
@@ -376,8 +432,29 @@ inline void IRGenerator::visitProgram(Program* program) {
                 visitVariableDecl(vd);
             else if (auto* cd = dynamic_cast<ClassDecl*>(decl.get()))
                 visitClassDecl(cd);
+            else if (auto* ns = dynamic_cast<NamespaceDecl*>(decl.get())) {
+                // 注册命名空间变量为全局变量
+                for (auto& m : ns->members) {
+                    if (auto* vd = dynamic_cast<VariableDecl*>(m.get())) {
+                        std::string qname = ns->name + "." + vd->name;
+                        ZCCIRValue::ID valID = nextValueID_++;
+                        values_[valID] = std::make_shared<ZCCIRValue>(
+                            ZCCIRValueKind::LOCAL, getAny(), valID);
+                        // 初始化值
+                        ZCCIRValue::ID initVal = 0;
+                        if (vd->initializer)
+                            initVal = generateExpression(vd->initializer);
+                        if (initVal)
+                            emitInstruction(ZCCIROpcode::STORE, {valID, initVal});
+                        declareVariable(qname, valID);
+                    } else if (auto* fd = dynamic_cast<FunctionDecl*>(m.get())) {
+                        visitFunctionDecl(fd);
+                    }
+                }
+            }
         }
     }
+    leaveScope();
 }
 
 inline void IRGenerator::visitFunctionDecl(FunctionDecl* decl) {
@@ -943,6 +1020,23 @@ inline void IRGenerator::visitSwitchStmt(SwitchStmt* stmt) {
 
 // 成员访问 obj.prop
 inline void IRGenerator::visitMemberExpr(MemberExpr* expr) {
+    // 命名空间限定名: ns.prop → 尝试查找 "ns.prop"
+    if (auto* ident = dynamic_cast<IdentifierExpr*>(expr->object.get())) {
+        std::string qname = ident->name + "." + expr->property;
+        // 先检查函数缓存
+        auto fit = functionCache_.find(qname);
+        if (fit != functionCache_.end()) {
+            currentExprResult_ = 0; // 函数引用
+            return;
+        }
+        // 再检查变量
+        ZCCIRValue::ID qid = lookupVariable(qname);
+        if (qid != 0) {
+            currentExprResult_ = emitInstruction(ZCCIROpcode::LOAD, {qid});
+            return;
+        }
+    }
+    // 通用对象成员访问
     ZCCIRValue::ID obj = generateExpression(expr->object);
     ZCCIRValue::ID propKey = emitConstant(expr->property, getString());
     currentExprResult_ = emitInstruction(ZCCIROpcode::OBJECT_GET, {obj, propKey});

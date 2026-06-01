@@ -564,6 +564,12 @@ StmtPtr Parser::parseStatement() {
         return parseSwitchStatement();
     }
 
+    // 嵌套函数声明 (闭包支持)
+    if (match(TokenType::FUNCTION)) {
+        auto decl = parseFunctionDeclaration();
+        return decl;  // Declaration inherits from Statement
+    }
+
     if (match(TokenType::AUTO) || match(TokenType::CONST)) {
         bool isConst = previous().type == TokenType::CONST;
         Token nameToken = expect(TokenType::IDENTIFIER, "Expected variable name");
