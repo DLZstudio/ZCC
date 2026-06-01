@@ -1,0 +1,25 @@
+// ============================================
+// BLAST 3-01: switch 语句
+// ZCC 有完整的 switch/case 语法支持
+// ============================================
+
+function main() {
+    auto val = 2;
+    auto result = 0;
+
+    switch (val) {
+        case 1:
+            result = 10;
+            break;
+        case 2:
+            result = 20;
+            break;
+        case 3:
+            result = 30;
+            break;
+        default:
+            result = 0;
+    }
+
+    print(result);
+}

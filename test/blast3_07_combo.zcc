@@ -1,0 +1,32 @@
+// ============================================
+// BLAST 3-07: 综合语法组合
+// 箭头函数 + for-each + 三元 + switch
+// ============================================
+
+function main() {
+    // 三元运算
+    auto max = (10 > 5) ? 10 : 5;
+
+    // switch 表达
+    auto day = 3;
+    auto name = "";
+    switch (day) {
+        case 1: name = "Mon"; break;
+        case 2: name = "Tue"; break;
+        case 3: name = "Wed"; break;
+        default: name = "???";
+    }
+
+    // 箭头函数 + for-each
+    auto items = [1, 2, 3];
+    auto total = 0;
+    for (each x in items) {
+        total += x;
+    }
+
+    // 综合结构
+    auto square = x => x * x;
+    auto result = square(5) + total;
+
+    print(result);
+}

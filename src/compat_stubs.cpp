@@ -220,6 +220,11 @@ std::string ZCCIRInstruction::toString() const {
     int idx = static_cast<int>(getOpcode());
     if (idx >= 0 && idx < (int)(sizeof(names)/sizeof(names[0]))) s = names[idx];
     else s = "op" + std::to_string(idx);
+    
+    // 如果指令产生结果值 (DEF)，先显示：%result = opcode ...
+    if (result_) {
+        s = "%" + std::to_string(result_->getID()) + " = " + s;
+    }
     s += " %" + std::to_string(getID());
     for (size_t i = 0; i < getNumOperands(); ++i) {
         auto val = getOperand(i).getValue();

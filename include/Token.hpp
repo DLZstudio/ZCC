@@ -32,7 +32,7 @@ enum class TokenType {
     TRY, CATCH, FINALLY, THROW,
     TRUE, FALSE,
     NEW, CLASS, EXTENDS, CONSTRUCTOR, THIS, SUPER, STATIC_, GET, SET,
-    EACH, IN,
+    EACH, IN, ZHONG,
     ASYNC, AWAIT, PROMISE, RESOLVE, REJECT,
     THREAD, START, SLEEP, WAIT_ALL, CLOSE,
     SWITCH, CASE,
@@ -238,6 +238,7 @@ private:
             case TokenType::SET: return "SET";
             case TokenType::EACH: return "EACH";
             case TokenType::IN: return "IN";
+            case TokenType::ZHONG: return "ZHONG";
             case TokenType::ASYNC: return "ASYNC";
             case TokenType::AWAIT: return "AWAIT";
             case TokenType::PROMISE: return "PROMISE";

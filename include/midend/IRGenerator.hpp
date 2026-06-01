@@ -120,8 +120,11 @@ private:
     ControlFlowInfo controlFlow_;
     
     std::vector<Diagnostic> errors_;
-    ZCCIRValue::ID nextValueID_ = 0;
+    ZCCIRValue::ID nextValueID_ = 1;  // 从1开始，0作为"未找到"哨兵
     ZCCIRInstruction::ID nextInstructionID_ = 0;
+    
+    // 值映射表: ID -> shared_ptr<ZCCIRValue> (包括常量、参数、局部变量、临时值)
+    std::unordered_map<ZCCIRValue::ID, std::shared_ptr<ZCCIRValue>> values_;
     
     // 函数和类型缓存
     std::unordered_map<std::string, ZCCIRFunction*> functionCache_;
@@ -190,16 +193,23 @@ inline ZCCIRValue::ID IRGenerator::emitInstruction(
     auto instr = std::make_unique<ZCCIRInstruction>(
         opcode, type ? type : getVoid(), nextInstructionID_++);
     
-    // 添加操作数
+    // 添加操作数 — 从 values_ 映射表查找真实值引用
     for (auto id : operands) {
-        // TODO: 从值 ID 创建操作数
-        instr->addOperand(ZCCIROperand());
+        auto it = values_.find(id);
+        if (it != values_.end()) {
+            instr->addOperand(ZCCIROperand(it->second));
+        } else {
+            instr->addOperand(ZCCIROperand());
+        }
     }
     
     ZCCIRValue::ID resultID = 0;
-    if (type && type->getName() != "void") {
+    if (!type || type->getName() != "void") {
         resultID = nextValueID_++;
-        // TODO: 创建临时值
+        auto resultValue = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::TEMPORARY, type ? ((const ZCCTypePtr&)type) : getAny(), resultID);
+        values_[resultID] = std::move(resultValue);
+        instr->setResult(values_[resultID]);  // 关联 DEF
     }
     
     currentBlock_->addInstruction(std::move(instr));
@@ -214,7 +224,12 @@ inline void IRGenerator::emitTerminator(ZCCIROpcode opcode,
         opcode, getVoid(), nextInstructionID_++);
     
     for (auto id : operands) {
-        instr->addOperand(ZCCIROperand());
+        auto it = values_.find(id);
+        if (it != values_.end()) {
+            instr->addOperand(ZCCIROperand(it->second));
+        } else {
+            instr->addOperand(ZCCIROperand());
+        }
     }
     
     currentBlock_->addInstruction(std::move(instr));
@@ -250,6 +265,7 @@ inline ZCCIRValue::ID IRGenerator::emitConstant(
         std::move(value), type ? type : getAny(), nextValueID_++);
     
     module_->addConstant(constant);
+    values_[constant->getID()] = constant;
     return constant->getID();
 }
 
@@ -378,11 +394,13 @@ inline void IRGenerator::visitFunctionDecl(FunctionDecl* decl) {
     // 创建入口块
     enterScope(true);
     
-    // 声明参数
+    // 声明参数 — 创建 ARGUMENT 值并注册到映射表
     for (size_t i = 0; i < decl->parameters.size(); ++i) {
         const auto& param = decl->parameters[i];
-        // TODO: 创建参数值
-        declareVariable(param, i);
+        ZCCIRValue::ID paramID = nextValueID_++;
+        values_[paramID] = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::ARGUMENT, getAny(), paramID);
+        declareVariable(param, paramID);
     }
     
     // 生成函数体
@@ -412,8 +430,10 @@ inline void IRGenerator::visitVariableDecl(VariableDecl* decl) {
         initValue = emitConstant(std::monostate{}, getAny());
     }
     
-    // 创建变量
+    // 创建变量值并注册到映射表
     ZCCIRValue::ID varID = nextValueID_++;
+    values_[varID] = std::make_shared<ZCCIRValue>(
+        ZCCIRValueKind::LOCAL, getAny(), varID);
     declareVariable(decl->name, varID);
     
     // 存储初始值
@@ -599,7 +619,7 @@ inline void IRGenerator::visitLiteralExpr(LiteralExpr* expr) {
             break;
     }
     
-    emitConstant(value, type);
+    currentExprResult_ = emitConstant(value, type);
 }
 
 inline void IRGenerator::visitBinaryExpr(BinaryExpr* expr) {
@@ -632,7 +652,7 @@ inline void IRGenerator::visitBinaryExpr(BinaryExpr* expr) {
             return;
     }
     
-    emitInstruction(opcode, {left, right});
+    currentExprResult_ = emitInstruction(opcode, {left, right});
 }
 
 inline void IRGenerator::visitUnaryExpr(UnaryExpr* expr) {
@@ -649,7 +669,7 @@ inline void IRGenerator::visitUnaryExpr(UnaryExpr* expr) {
             return;
     }
     
-    emitInstruction(opcode, {operand});
+    currentExprResult_ = emitInstruction(opcode, {operand});
 }
 
 inline void IRGenerator::visitAssignExpr(AssignExpr* expr) {
@@ -666,6 +686,7 @@ inline void IRGenerator::visitAssignExpr(AssignExpr* expr) {
             ZCCIRValue::ID key = emitConstant(mem->property, getString());
             emitInstruction(ZCCIROpcode::OBJECT_SET, {obj, key, value});
         }
+        currentExprResult_ = value;
         return;
     }
     
@@ -676,6 +697,7 @@ inline void IRGenerator::visitAssignExpr(AssignExpr* expr) {
         return;
     }
     emitInstruction(ZCCIROpcode::STORE, {varID, value});
+    currentExprResult_ = value;
 }
 
 inline void IRGenerator::visitCallExpr(CallExpr* expr) {
@@ -691,7 +713,7 @@ inline void IRGenerator::visitCallExpr(CallExpr* expr) {
     std::vector<ZCCIRValue::ID> operands = {callee};
     operands.insert(operands.end(), args.begin(), args.end());
     
-    emitInstruction(ZCCIROpcode::CALL, operands);
+    currentExprResult_ = emitInstruction(ZCCIROpcode::CALL, operands);
 }
 
 // 模块声明 - 不需要生成代码
@@ -754,8 +776,10 @@ inline void IRGenerator::visitForEachStmt(ForEachStmt* stmt) {
     emitJump(initBlock);
     currentBlock_ = initBlock;
     ZCCIRValue::ID indexVar = nextValueID_++;
-    emitConstant(static_cast<int64_t>(0), getI64());
-    emitInstruction(ZCCIROpcode::STORE, {indexVar, 0UL});
+    values_[indexVar] = std::make_shared<ZCCIRValue>(
+        ZCCIRValueKind::LOCAL, getAny(), indexVar);
+    ZCCIRValue::ID constZero = emitConstant(static_cast<int64_t>(0), getI64());
+    emitInstruction(ZCCIROpcode::STORE, {indexVar, constZero});
     emitJump(condBlock);
     
     // 条件检查
@@ -817,8 +841,10 @@ inline void IRGenerator::visitTryStmt(TryStmt* stmt) {
     if (catchBlock && stmt->catchBlock) {
         currentBlock_ = catchBlock;
         if (!stmt->catchVariable.empty()) {
-            ZCCIRValue::ID exVar = nextValueID_++;
-            declareVariable(stmt->catchVariable, exVar);
+        ZCCIRValue::ID exVar = nextValueID_++;
+        values_[exVar] = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::LOCAL, getAny(), exVar);
+        declareVariable(stmt->catchVariable, exVar);
         }
         generateStatement(std::make_shared<BlockStmt>(*stmt->catchBlock));
         if (!currentBlock_->isTerminated()) {
@@ -895,14 +921,14 @@ inline void IRGenerator::visitSwitchStmt(SwitchStmt* stmt) {
 inline void IRGenerator::visitMemberExpr(MemberExpr* expr) {
     ZCCIRValue::ID obj = generateExpression(expr->object);
     ZCCIRValue::ID propKey = emitConstant(expr->property, getString());
-    emitInstruction(ZCCIROpcode::OBJECT_GET, {obj, propKey});
+    currentExprResult_ = emitInstruction(ZCCIROpcode::OBJECT_GET, {obj, propKey});
 }
 
 // 索引访问 obj[index]
 inline void IRGenerator::visitIndexExpr(IndexExpr* expr) {
     ZCCIRValue::ID obj = generateExpression(expr->object);
     ZCCIRValue::ID idx = generateExpression(expr->index);
-    emitInstruction(ZCCIROpcode::ARRAY_GET, {obj, idx});
+    currentExprResult_ = emitInstruction(ZCCIROpcode::ARRAY_GET, {obj, idx});
 }
 
 // 数组字面量 [elem1, elem2, ...]
@@ -918,6 +944,7 @@ inline void IRGenerator::visitArrayExpr(ArrayExpr* expr) {
         ZCCIRValue::ID idx = emitConstant(static_cast<int64_t>(i), getI64());
         emitInstruction(ZCCIROpcode::ARRAY_SET, {arr, idx, elements[i]});
     }
+    currentExprResult_ = arr;
 }
 
 // 对象字面量 { key: value, ... }
@@ -929,6 +956,7 @@ inline void IRGenerator::visitObjectExpr(ObjectExpr* expr) {
         ZCCIRValue::ID value = generateExpression(prop.value);
         emitInstruction(ZCCIROpcode::OBJECT_SET, {obj, key, value});
     }
+    currentExprResult_ = obj;
 }
 
 // 函数表达式 function name(params) { body }
@@ -953,7 +981,10 @@ inline void IRGenerator::visitFunctionExpr(FunctionExpr* expr) {
     
     // 声明参数
     for (size_t i = 0; i < expr->parameters.size(); ++i) {
-        declareVariable(expr->parameters[i], nextValueID_++);
+        ZCCIRValue::ID paramID = nextValueID_++;
+        values_[paramID] = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::ARGUMENT, getAny(), paramID);
+        declareVariable(expr->parameters[i], paramID);
     }
     
     // 生成函数体
@@ -991,8 +1022,9 @@ inline void IRGenerator::visitArrowFunctionExpr(ArrowFunctionExpr* expr) {
     enterScope(true);
     
     for (size_t i = 0; i < expr->parameters.size(); ++i) {
-        // 使用 nextValueID_++ 避免 ID 0 冲突 (0 = 未找到)
         ZCCIRValue::ID paramID = nextValueID_++;
+        values_[paramID] = std::make_shared<ZCCIRValue>(
+            ZCCIRValueKind::ARGUMENT, getAny(), paramID);
         declareVariable(expr->parameters[i], paramID);
     }
     
@@ -1043,6 +1075,7 @@ inline void IRGenerator::visitTernaryExpr(TernaryExpr* expr) {
     currentBlock_ = endBlock;
     // Phi 节点合并两个分支的值
     ZCCIRValue::ID phiVal = emitInstruction(ZCCIROpcode::PHI, {thenVal, elseVal});
+    currentExprResult_ = phiVal;
 }
 
 inline void IRGenerator::visitIdentifierExpr(IdentifierExpr* expr) {

@@ -256,6 +256,7 @@ std::optional<Token> Lexer::scanIdentifier() {
             case KeywordMap::KeywordType::SET: tokenType = TokenType::SET; break;
             case KeywordMap::KeywordType::EACH: tokenType = TokenType::EACH; break;
             case KeywordMap::KeywordType::IN: tokenType = TokenType::IN; break;
+            case KeywordMap::KeywordType::ZHONG: tokenType = TokenType::ZHONG; break;
             case KeywordMap::KeywordType::ASYNC: tokenType = TokenType::ASYNC; break;
             case KeywordMap::KeywordType::AWAIT: tokenType = TokenType::AWAIT; break;
             case KeywordMap::KeywordType::PROMISE: tokenType = TokenType::PROMISE; break;
@@ -432,6 +433,11 @@ std::optional<Token> Lexer::scanOperator() {
                     addError("Invalid number: " + text, startLine, startCol);
                     return makeToken(TokenType::NUMBER, 0.0);
                 }
+            }
+            // ... 展开/剩余参数: 三个连续 '.' → DOT_DOT_DOT token
+            if (peekChar() == '.' && peekNext() == '.') {
+                advance(); advance();
+                return makeToken(TokenType::DOT_DOT_DOT);
             }
             return makeToken(TokenType::DOT);
         case ';': return makeToken(TokenType::SEMICOLON);

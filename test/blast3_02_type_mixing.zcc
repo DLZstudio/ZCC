@@ -1,0 +1,24 @@
+// ============================================
+// BLAST 3-02: 类型混合运算
+// 正常程序中常见的类型强制/混合使用
+// ============================================
+
+function main() {
+    // 字符串 + 数字 — 标准 JS 行为
+    auto concat1 = "value: " + 42;
+
+    // true/false 参与算术
+    auto bool_math = true * 10 + false;
+
+    // null + 数字
+    auto null_add = null + 5;
+
+    // undefined 参与运算
+    auto undef_mul = undefined * 3;
+
+    // 严格相等 vs 宽松相等
+    auto strict_cmp = (5 === 5);
+    auto loose_cmp = (5 == "5");
+
+    print(concat1);
+}

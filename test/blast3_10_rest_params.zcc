@@ -1,0 +1,23 @@
+// ============================================
+// BLAST 3-10: 剩余参数 + 对象组合
+// 函数可变参数
+// ============================================
+
+function sum(...args) {
+    auto total = 0;
+    auto i = 0;
+    while (i < args.length) {
+        total += args[i];
+        i += 1;
+    }
+    return total;
+}
+
+function main() {
+    auto result = sum(1, 2, 3, 4, 5);
+
+    // 对象字面量组合
+    auto origin = () => ({ x: 0, y: 0 });
+
+    print(result);
+}

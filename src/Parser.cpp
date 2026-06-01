@@ -677,6 +677,9 @@ StmtPtr Parser::parseForEachStatement() {
 
     auto iterable = parseExpression();
 
+    // 可选: 中文 for-each 尾缀 "中"
+    match(TokenType::ZHONG);
+
     // Body 由调用方处理: for (each x in arr) { body } 或 for each x in arr { body }
     return std::make_shared<ForEachStmt>(variable, iterable, nullptr, getLocation(varToken));
 }
@@ -1055,6 +1058,37 @@ ExprPtr Parser::parsePrimary() {
                                             getLocation(token));
     }
     
+    // 箭头函数简写: x => body (必须在 match(IDENTIFIER) 之前检测)
+    if (check(TokenType::IDENTIFIER)) {
+        Token paramToken = peek();
+        size_t savedCurrent = current_;
+        advance();
+        
+        if (match(TokenType::ARROW)) {
+            current_ = savedCurrent;
+            
+            std::vector<std::string> params;
+            if (check(TokenType::IDENTIFIER)) {
+                params.push_back(advance().lexeme);
+            }
+            
+            expect(TokenType::ARROW, "Expected '=>' in arrow function");
+            
+            if (check(TokenType::LEFT_BRACE)) {
+                auto body = parseBlock();
+                return std::make_shared<ArrowFunctionExpr>(params, nullptr, body->statements, false,
+                                                          getLocation(paramToken));
+            } else {
+                auto exprBody = parseExpression();
+                return std::make_shared<ArrowFunctionExpr>(params, exprBody, 
+                                                           std::vector<StmtPtr>{}, false,
+                                                           getLocation(paramToken));
+            }
+        }
+        
+        current_ = savedCurrent;
+    }
+    
     if (match(TokenType::IDENTIFIER)) {
         Token token = previous();
         return std::make_shared<IdentifierExpr>(token.lexeme, getLocation(token));
@@ -1134,37 +1168,6 @@ ExprPtr Parser::parsePrimary() {
     
     if (match(TokenType::SUPER)) {
         return std::make_shared<IdentifierExpr>("super", SourceLocation(filename_, 0, 0, 0));
-    }
-    
-    // 箭头函数简写
-    if (check(TokenType::IDENTIFIER)) {
-        Token paramToken = peek();
-        size_t savedCurrent = current_;
-        advance();
-        
-        if (match(TokenType::ARROW)) {
-            current_ = savedCurrent;
-            
-            std::vector<std::string> params;
-            if (check(TokenType::IDENTIFIER)) {
-                params.push_back(advance().lexeme);
-            }
-            
-            expect(TokenType::ARROW, "Expected '=>' in arrow function");
-            
-            if (check(TokenType::LEFT_BRACE)) {
-                auto body = parseBlock();
-                return std::make_shared<ArrowFunctionExpr>(params, nullptr, body->statements, false,
-                                                          getLocation(paramToken));
-            } else {
-                auto exprBody = parseExpression();
-                return std::make_shared<ArrowFunctionExpr>(params, exprBody, 
-                                                           std::vector<StmtPtr>{}, false,
-                                                           getLocation(paramToken));
-            }
-        }
-        
-        current_ = savedCurrent;
     }
     
     Token token = peek();

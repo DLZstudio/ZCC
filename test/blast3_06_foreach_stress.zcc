@@ -1,0 +1,23 @@
+// ============================================
+// BLAST 3-06: for-each 修复后压力测试
+// 测试修复后的 for-each 复杂场景
+// ============================================
+
+function main() {
+    auto items = [100, 200, 300];
+    auto total = 0;
+
+    // 基本 for-each
+    for (each item in items) {
+        total += item;
+    }
+
+    // 带括号的 for-each (修复后应支持)
+    for (each n in items) {
+        if (n > 150) {
+            total += n * 2;
+        }
+    }
+
+    print(total);
+}

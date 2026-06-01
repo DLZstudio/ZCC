@@ -202,12 +202,16 @@ public:
     const ZCCTypePtr& getType() const { return type_; }
     ID getID() const { return id_; }
 
-    // 操作数
+    // 操作数 (USE)
     size_t getNumOperands() const { return operands_.size(); }
     ZCCIROperand& getOperand(size_t idx) { return operands_[idx]; }
     const ZCCIROperand& getOperand(size_t idx) const { return operands_[idx]; }
     void setOperand(size_t idx, ZCCIROperand operand);
     void addOperand(ZCCIROperand operand);
+    
+    // 结果值 (DEF) — 指令产生的 SSA 值
+    ZCCIROperand::ValuePtr getResult() const { return result_; }
+    void setResult(ZCCIROperand::ValuePtr value) { result_ = std::move(value); }
 
     // 块引用
     ZCCIRBlock* getParent() const { return parent_; }
@@ -226,6 +230,7 @@ private:
     ZCCTypePtr type_;
     ID id_;
     OperandList operands_;
+    ZCCIROperand::ValuePtr result_;
     ZCCIRBlock* parent_ = nullptr;
 
     // 调试信息

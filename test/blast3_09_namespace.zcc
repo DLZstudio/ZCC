@@ -1,0 +1,20 @@
+// ============================================
+// BLAST 3-09: 命名空间 + 模块声明
+// ZCC 有 namespace 和 module 支持
+// ============================================
+
+namespace Math {
+    auto PI = 3.14159;
+
+    function square(x) {
+        return x * x;
+    }
+}
+
+function main() {
+    auto area = Math.PI * 100;
+    auto sqr = Math.square(5);
+
+    print(area);
+    print(sqr);
+}

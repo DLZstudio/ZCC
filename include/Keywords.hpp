@@ -143,7 +143,7 @@ public:
         // 面向对象
         NEW, CLASS, EXTENDS, CONSTRUCTOR, THIS, SUPER, STATIC_, GET, SET,
         // 遍历
-        EACH, IN,
+        EACH, IN, ZHONG,
         // 异步
         ASYNC, AWAIT, PROMISE, RESOLVE, REJECT,
         // 线程
@@ -200,6 +200,7 @@ public:
         keywordMap_[CNKeywords::设置] = KeywordType::SET;
         keywordMap_[CNKeywords::每个] = KeywordType::EACH;
         keywordMap_[CNKeywords::在] = KeywordType::IN;
+        keywordMap_[CNKeywords::中] = KeywordType::ZHONG;
         keywordMap_[CNKeywords::异步] = KeywordType::ASYNC;
         keywordMap_[CNKeywords::等待] = KeywordType::AWAIT;
         keywordMap_[CNKeywords::承诺] = KeywordType::PROMISE;
