@@ -299,15 +299,24 @@ private:
     public:
         Interpreter(InterpreterState& state) : state_(state) {}
         
+        // 块执行结果 (CFG 后继)
+        struct BlockResult {
+            ZCCIRBlock* nextBlock = nullptr;
+            RuntimeValue value;
+        };
+        
         RuntimeValue execute();
-        RuntimeValue executeBlock(const ZCCIRBlock& block);
+        BlockResult executeBlock(const ZCCIRBlock& block);
         RuntimeValue executeInstruction(const ZCCIRInstruction& instr);
+        RuntimeValue executeCall(const ZCCIRInstruction& instr);
+        
+        // 操作数解析
+        RuntimeValue resolveOperand(const ZCCIRInstruction& instr, size_t idx);
+        RuntimeValue constantToRuntime(const ZCCIRConstant::ConstantValue& cv);
         
     private:
         InterpreterState& state_;
-        std::stack<ZCCIRBlock*> callStack_;
-        ZCCIRBlock* currentBlock_ = nullptr;
-        size_t instructionIndex_ = 0;
+        std::unordered_map<uint32_t, RuntimeValue> reg_;  // 指令结果寄存器
     };
     
     // 生成自包含的可执行文件（包含解释器和字节码）

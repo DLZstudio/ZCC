@@ -1,0 +1,53 @@
+ZCCS
+
+[manifest]
+// ===== 模块基本信息 =====
+module.name = org.example.network
+module.version = 1.0.0
+module.sca_version = 0.3
+
+// ===== 执行模式声明 =====
+module.modes = ir-exec,compile
+
+// ===== 依赖项 =====
+[dependency]
+name = org.std.crypto
+type = sca
+version = >=1.5.0
+
+[dependency]
+name = system.openssl
+type = executable
+min_version = 3.0.0
+ipc_method = stdio
+version_cmd = openssl version
+
+// ===== 接口映射 =====
+[interface]
+symbol = hash
+provider = org.std.crypto
+export = sha256_hash
+
+[interface]
+symbol = send
+provider = system.openssl
+endpoint = s_client
+[/manifest]
+
+[zcc]
+// 代码不再关心实现细节，只声明接口
+@external function hash(data);
+@external function send(host, data);
+
+function main() {
+    var data = "Hello SCA v0.3";
+    var digest = hash(data);
+    send("example.com", digest);
+}
+[/zcc]
+
+[ir]
+.func main
+  %1 = call hash("Hello")
+  ret %1
+[/ir]

@@ -13,6 +13,7 @@
 #include <set>
 #include <variant>
 #include <mutex>
+#include <cstdio>
 
 namespace zcc {
 
@@ -113,38 +114,6 @@ struct ModuleMetadata {
     ModuleMetadata() : type(ModuleType::UNKNOWN) {}
 };
 
-// ============== 加载结果与选项 ==============
-
-// 加载结果
-struct LoadResult {
-    bool success;
-    std::unique_ptr<struct Module> module;
-    std::vector<UnresolvedSymbol> unresolved_symbols;  // 虚空接口列表
-    std::vector<std::string> warnings;
-    std::vector<std::string> errors;
-    std::shared_ptr<ModuleMetadata> metadata;
-    
-    // 模块类型特定数据
-    std::variant<std::monostate, struct SCAModule, struct ExecutableModule, 
-                struct DynamicLibModule, struct ScriptModule> specific_data;
-    
-    LoadResult() : success(false) {}
-    
-    static LoadResult create_success(std::unique_ptr<struct Module> mod) {
-        LoadResult result;
-        result.success = true;
-        result.module = std::move(mod);
-        return result;
-    }
-    
-    static LoadResult create_failure(const std::string& error) {
-        LoadResult result;
-        result.success = false;
-        result.errors.push_back(error);
-        return result;
-    }
-};
-
 // 加载选项
 struct LoadOptions {
     bool lazy_load = false;          // 延迟加载（仅解析元数据）
@@ -190,6 +159,98 @@ struct CodeBlock {
     CodeBlock() : source_line(0) {}
 };
 
+// ============== SCA v0.3 Manifest 系统 ==============
+
+// Manifest 中的依赖声明
+struct SCAManifestDependency {
+    std::string name;                // 依赖名 (如 org.std.crypto)
+    std::string type = "sca";       // 类型: sca / executable
+    std::string version;             // 版本约束 (如 >=1.5.0)
+    std::string min_version;         // 最低版本
+    std::string ipc_method;          // IPC 方式 (executable 类型用)
+    std::string version_cmd;         // 版本检查命令 (executable 类型用)
+};
+
+// Manifest 中的接口映射
+struct SCAManifestInterface {
+    std::string symbol;              // 虚空接口符号名 (如 hash)
+    std::string provider;            // 提供者 (依赖名)
+    std::string export_name;         // 提供者中的导出名
+    std::string endpoint;            // 端点 (executable 类型用)
+};
+
+// SCA v0.3 Manifest — 模块清单
+struct SCAManifest {
+    // 模块自身信息
+    std::string name;                // module.name
+    std::string version = "0.0.0";  // module.version
+    std::string sca_version = "0.3"; // module.sca_version
+    std::vector<std::string> modes;  // module.modes = compile,ir-exec,...
+    
+    // 依赖列表
+    std::vector<SCAManifestDependency> dependencies;
+    
+    // 接口映射 (替代正则猜测的虚空接口)
+    std::vector<SCAManifestInterface> interfaces;
+    
+    // 控制字段
+    bool has_manifest = false;       // 文件是否包含 manifest 段
+    bool native_only = true;         // v0.3 铁律: 只允许 zcc + ir 块
+    
+    // 从 modes 推断的能力
+    bool supportsCompile()  const { return hasMode("compile"); }
+    bool supportsIRExec()   const { return hasMode("ir-exec"); }
+    
+private:
+    bool hasMode(const std::string& m) const {
+        for (auto& mode : modes)
+            if (mode == m) return true;
+        return false;
+    }
+};
+
+// ============== SemVer 工具 ==============
+
+struct SemVer {
+    int major = 0, minor = 0, patch = 0;
+    
+    static SemVer parse(const std::string& s) {
+        SemVer v;
+        sscanf(s.c_str(), "%d.%d.%d", &v.major, &v.minor, &v.patch);
+        return v;
+    }
+    
+    bool operator<(const SemVer& o) const {
+        if (major != o.major) return major < o.major;
+        if (minor != o.minor) return minor < o.minor;
+        return patch < o.patch;
+    }
+    bool operator==(const SemVer& o) const {
+        return major == o.major && minor == o.minor && patch == o.patch;
+    }
+    bool operator<=(const SemVer& o) const { return *this < o || *this == o; }
+    bool operator>(const SemVer& o) const { return o < *this; }
+    bool operator>=(const SemVer& o) const { return o < *this || *this == o; }
+};
+
+// 检查版本约束: ">=1.5.0", ">1.0.0", "==2.0.0"
+inline bool checkVersionConstraint(const std::string& constraint, const std::string& actual) {
+    if (constraint.empty() || actual.empty()) return true;  // 无约束或无版本 → 视为通过
+    
+    auto v = SemVer::parse(actual);
+    
+    if (constraint.size() >= 2 && constraint[0] == '>' && constraint[1] == '=') {
+        return v >= SemVer::parse(constraint.substr(2));
+    } else if (constraint[0] == '>') {
+        return v > SemVer::parse(constraint.substr(1));
+    } else if (constraint.size() >= 2 && constraint[0] == '=' && constraint[1] == '=') {
+        return v == SemVer::parse(constraint.substr(2));
+    } else {
+        // 无操作符 → 视为最低版本 >=
+        return v >= SemVer::parse(constraint);
+    }
+}
+
 // ============== SCA 模块 ==============
 
 struct SCAModule {
@@ -197,6 +258,7 @@ struct SCAModule {
     std::vector<CodeBlock> blocks;
     std::shared_ptr<ModuleMetadata> metadata;
     std::string cache_key;
+    SCAManifest manifest;  // SCA v0.3 Manifest
     
     SCAModule() : metadata(std::make_shared<ModuleMetadata>()) {}
 };
@@ -234,6 +296,38 @@ struct Module {
     Module(const std::filesystem::path& p, ModuleType t) 
         : path(p), type(t) {}
     virtual ~Module() = default;
+};
+
+// ============== 加载结果 ==============
+// (必须放在 SCAModule/ExecutableModule/DynamicLibModule/ScriptModule 之后,
+//  因为 std::variant 要求完整类型)
+
+struct LoadResult {
+    bool success;
+    std::unique_ptr<Module> module;
+    std::vector<UnresolvedSymbol> unresolved_symbols;
+    std::vector<std::string> warnings;
+    std::vector<std::string> errors;
+    std::shared_ptr<ModuleMetadata> metadata;
+    
+    std::variant<std::monostate, SCAModule, ExecutableModule, 
+                DynamicLibModule, ScriptModule> specific_data;
+    
+    LoadResult() : success(false) {}
+    
+    static LoadResult create_success(std::unique_ptr<Module> mod) {
+        LoadResult result;
+        result.success = true;
+        result.module = std::move(mod);
+        return result;
+    }
+    
+    static LoadResult create_failure(const std::string& error) {
+        LoadResult result;
+        result.success = false;
+        result.errors.push_back(error);
+        return result;
+    }
 };
 
 // ============== 扩展模块加载器基类 ==============
@@ -364,6 +458,7 @@ public:
     
 private:
     SCAModule parse_sca_file(const std::filesystem::path& path);
+    SCAManifest parse_manifest(const std::string& content);  // SCA v0.3
     void process_zcc_block(const CodeBlock& block, LoadResult& result);
     void process_ir_block(const CodeBlock& block, LoadResult& result);
     void process_native_block(const CodeBlock& block, LoadResult& result);

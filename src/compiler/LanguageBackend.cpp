@@ -365,6 +365,41 @@ std::string CBackendPlugin::generateInstruction(const ZCCIRInstruction& instr) {
     // 异常
     case ZCCIROpcode::THROW: ss << "zcc_throw(" << opName(instr,0) << ");"; break;
     
+    // 内存操作
+    case ZCCIROpcode::ALLOCA: ss << "void* " << opName(instr,0) << " = alloca(" << opName(instr,1) << ");"; break;
+    case ZCCIROpcode::ALLOC:  ss << "void* " << opName(instr,0) << " = malloc(" << opName(instr,1) << ");"; break;
+    case ZCCIROpcode::FREE:   ss << "free(" << opName(instr,0) << ");"; break;
+    
+    // 类型转换
+    case ZCCIROpcode::TRUNC:   ss << opName(instr,0) << " = (int64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::ZEXT:    ss << opName(instr,0) << " = (uint64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::SEXT:    ss << opName(instr,0) << " = (int64_t)(int32_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::FPTRUNC: ss << opName(instr,0) << " = (float)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::FPEXT:   ss << opName(instr,0) << " = (double)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::FPTOUI:  ss << opName(instr,0) << " = (uint64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::FPTOSI:  ss << opName(instr,0) << " = (int64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::UITOFP:  ss << opName(instr,0) << " = (double)(uint64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::SITOFP:  ss << opName(instr,0) << " = (double)(int64_t)" << opName(instr,1) << ";"; break;
+    case ZCCIROpcode::BITCAST: ss << opName(instr,0) << " = " << opName(instr,1) << "; /* bitcast */"; break;
+    
+    // 高精度 (续)
+    case ZCCIROpcode::BIG_DIV: ss << "bignum_div(&" << opName(instr,0) << ",&" << opName(instr,1) << ",&" << opName(instr,2) << ");"; break;
+    case ZCCIROpcode::BIG_MOD: ss << "bignum_mod(&" << opName(instr,0) << ",&" << opName(instr,1) << ",&" << opName(instr,2) << ");"; break;
+    case ZCCIROpcode::BIG_CMP: ss << opName(instr,0) << " = bignum_cmp(&" << opName(instr,1) << ",&" << opName(instr,2) << ");"; break;
+    case ZCCIROpcode::BIG_POW: ss << "bignum_pow(&" << opName(instr,0) << ",&" << opName(instr,1) << ",&" << opName(instr,2) << ");"; break;
+    
+    // 字符串操作
+    case ZCCIROpcode::STR_CONCAT: ss << opName(instr,0) << " = zcc_str_concat(" << opName(instr,1) << "," << opName(instr,2) << ");"; break;
+    case ZCCIROpcode::STR_LEN:    ss << opName(instr,0) << " = strlen(" << opName(instr,1) << ");"; break;
+    case ZCCIROpcode::STR_CMP:    ss << opName(instr,0) << " = strcmp(" << opName(instr,1) << "," << opName(instr,2) << ");"; break;
+    case ZCCIROpcode::STR_SLICE:  ss << opName(instr,0) << " = zcc_str_slice(" << opName(instr,1) << "," << opName(instr,2) << "," << opName(instr,3) << ");"; break;
+    
+    // 特殊操作
+    case ZCCIROpcode::INTRINSIC: ss << "// intrinsic: " << opName(instr,0); break;
+    case ZCCIROpcode::ASSEMBLY:  ss << "__asm__(" << opName(instr,0) << ");"; break;
+    case ZCCIROpcode::TRAP:       ss << "abort();"; break;
+    case ZCCIROpcode::UNREACHABLE: ss << "__builtin_unreachable();"; break;
+    
     default: ss << "// opcode " << static_cast<int>(instr.getOpcode()); break;
     }
     return ss.str();

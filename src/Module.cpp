@@ -1,8 +1,11 @@
 #include "Module.hpp"
+#include "IPC.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <cstring>
+#include <thread>
+#include <chrono>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -104,6 +107,124 @@ std::string SmartSCALoader::trim(const std::string& str) {
     return str.substr(start, end - start + 1);
 }
 
+// ==================== SCA v0.3 Manifest 解析器 ====================
+
+SCAManifest SmartSCALoader::parse_manifest(const std::string& content) {
+    SCAManifest manifest;
+    
+    // 提取 [manifest] ... [/manifest] 段
+    std::regex manifest_regex(R"(\[manifest\]([\s\S]*?)\[/manifest\])");
+    std::smatch match;
+    if (!std::regex_search(content, match, manifest_regex)) {
+        return manifest;  // 无 manifest 段 → has_manifest = false
+    }
+    
+    manifest.has_manifest = true;
+    std::string body = match[1].str();
+    
+    // 当前正在填充哪个 section
+    enum class Section { NONE, DEPENDENCY, INTERFACE };
+    Section currentSection = Section::NONE;
+    SCAManifestDependency currentDep;
+    SCAManifestInterface currentIface;
+    
+    // 按行解析
+    std::istringstream stream(body);
+    std::string line;
+    while (std::getline(stream, line)) {
+        // 去除首尾空白和注释
+        line = trim(line);
+        if (line.empty()) continue;
+        
+        // 跳过注释行
+        if (line.size() >= 2 && line[0] == '/' && line[1] == '/') continue;
+        if (line.size() >= 2 && line[0] == '/' && line[1] == '*') continue;
+        
+        // 检测 section 头
+        if (line == "[dependency]") {
+            // 保存上一个 dependency
+            if (currentSection == Section::DEPENDENCY && !currentDep.name.empty()) {
+                manifest.dependencies.push_back(std::move(currentDep));
+                currentDep = SCAManifestDependency{};
+            }
+            if (currentSection == Section::INTERFACE && !currentIface.symbol.empty()) {
+                manifest.interfaces.push_back(std::move(currentIface));
+                currentIface = SCAManifestInterface{};
+            }
+            currentSection = Section::DEPENDENCY;
+            continue;
+        }
+        if (line == "[interface]") {
+            if (currentSection == Section::DEPENDENCY && !currentDep.name.empty()) {
+                manifest.dependencies.push_back(std::move(currentDep));
+                currentDep = SCAManifestDependency{};
+            }
+            if (currentSection == Section::INTERFACE && !currentIface.symbol.empty()) {
+                manifest.interfaces.push_back(std::move(currentIface));
+                currentIface = SCAManifestInterface{};
+            }
+            currentSection = Section::INTERFACE;
+            continue;
+        }
+        
+        // 解析 key = value
+        auto eqPos = line.find('=');
+        if (eqPos == std::string::npos) continue;
+        std::string key = trim(line.substr(0, eqPos));
+        std::string value = trim(line.substr(eqPos + 1));
+        
+        // 分发到对应的 section
+        switch (currentSection) {
+            case Section::NONE:
+                // 顶级 key: module.*
+                if (key == "module.name")          manifest.name = value;
+                else if (key == "module.version")  manifest.version = value;
+                else if (key == "module.sca_version") manifest.sca_version = value;
+                else if (key == "module.modes") {
+                    // 逗号分隔的模式列表
+                    std::istringstream ms(value);
+                    std::string mode;
+                    while (std::getline(ms, mode, ',')) {
+                        mode = trim(mode);
+                        if (!mode.empty()) manifest.modes.push_back(mode);
+                    }
+                }
+                break;
+                
+            case Section::DEPENDENCY:
+                if (key == "name")              currentDep.name = value;
+                else if (key == "type")         currentDep.type = value;
+                else if (key == "version")      currentDep.version = value;
+                else if (key == "min_version")  currentDep.min_version = value;
+                else if (key == "ipc_method")   currentDep.ipc_method = value;
+                else if (key == "version_cmd")  currentDep.version_cmd = value;
+                break;
+                
+            case Section::INTERFACE:
+                if (key == "symbol")     currentIface.symbol = value;
+                else if (key == "provider")  currentIface.provider = value;
+                else if (key == "export")    currentIface.export_name = value;
+                else if (key == "endpoint")  currentIface.endpoint = value;
+                break;
+        }
+    }
+    
+    // 保存最后一个 section
+    if (currentSection == Section::DEPENDENCY && !currentDep.name.empty()) {
+        manifest.dependencies.push_back(std::move(currentDep));
+    }
+    if (currentSection == Section::INTERFACE && !currentIface.symbol.empty()) {
+        manifest.interfaces.push_back(std::move(currentIface));
+    }
+    
+    // 默认 modes: 若无声明, 仅支持 compile
+    if (manifest.modes.empty()) {
+        manifest.modes.push_back("compile");
+    }
+    
+    return manifest;
+}
+
 SCAModule SmartSCALoader::parse_sca_file(const std::filesystem::path& path) {
     SCAModule module;
     module.source_name = path.string();
@@ -121,6 +242,16 @@ SCAModule SmartSCALoader::parse_sca_file(const std::filesystem::path& path) {
         content = content.substr(4);
     }
     
+    // ===== SCA v0.3: 优先解析 Manifest =====
+    module.manifest = parse_manifest(content);
+    
+    // 移除 manifest 段内容，避免被后续块解析器误读
+    std::string blockContent = content;
+    if (module.manifest.has_manifest) {
+        std::regex manifest_block(R"(\[manifest\][\s\S]*?\[/manifest\])");
+        blockContent = std::regex_replace(blockContent, manifest_block, "");
+    }
+    
     // 解析 [语言] 块
     // 匹配格式：[language] code [/language] 或 [language] code [next]
     std::regex block_pattern(
@@ -128,7 +259,7 @@ SCAModule SmartSCALoader::parse_sca_file(const std::filesystem::path& path) {
         std::regex_constants::ECMAScript
     );
     
-    std::sregex_iterator it(content.begin(), content.end(), block_pattern);
+    std::sregex_iterator it(blockContent.begin(), blockContent.end(), block_pattern);
     std::sregex_iterator end;
     
     size_t line_number = 1;
@@ -139,26 +270,27 @@ SCAModule SmartSCALoader::parse_sca_file(const std::filesystem::path& path) {
         // 转换为小写
         std::transform(language.begin(), language.end(), language.begin(), ::tolower);
         
+        // ===== SCA v0.3: 块类型白名单检查 =====
+        // 只允许 zcc 和 ir; c/cpp/asm/manifest 一律拒绝
+        if (language == "c" || language == "cpp" || language == "c++" ||
+            language == "asm" || language == "assembly" || language == "manifest") {
+            continue;  // v0.3: 静默跳过非原生块
+        }
+        
         // 计算源代码行号
         size_t pos = (*it).position();
-        size_t prev_newlines = std::count(content.begin(), content.begin() + pos, '\n');
+        size_t prev_newlines = std::count(blockContent.begin(), blockContent.begin() + pos, '\n');
         
         CodeBlock block;
         block.language = language;
         block.code = trim(code);
         block.source_line = line_number + prev_newlines;
         
-        // 确定语言类型
+        // 确定语言类型（v0.3: 仅 ZCC 和 IR）
         if (language == "zcc") {
             block.lang_type = CodeLanguage::ZCC;
         } else if (language == "ir") {
             block.lang_type = CodeLanguage::IR;
-        } else if (language == "c") {
-            block.lang_type = CodeLanguage::C;
-        } else if (language == "cpp" || language == "c++") {
-            block.lang_type = CodeLanguage::CPP;
-        } else if (language == "asm" || language == "assembly") {
-            block.lang_type = CodeLanguage::ASM;
         } else {
             block.lang_type = CodeLanguage::UNKNOWN;
         }
@@ -170,7 +302,7 @@ SCAModule SmartSCALoader::parse_sca_file(const std::filesystem::path& path) {
     if (module.blocks.empty()) {
         CodeBlock block;
         block.language = "zcc";
-        block.code = content;
+        block.code = blockContent;
         block.lang_type = CodeLanguage::ZCC;
         block.source_line = 1;
         module.blocks.push_back(std::move(block));
@@ -209,41 +341,48 @@ void SmartSCALoader::process_native_block(const CodeBlock& block, LoadResult& re
 
 std::vector<UnresolvedSymbol> SmartSCALoader::find_unresolved_symbols(const SCAModule& module) {
     std::vector<UnresolvedSymbol> unresolved;
+    
+    // ===== SCA v0.3: 如果 manifest 声明了接口映射，直接用 =====
+    if (module.manifest.has_manifest && !module.manifest.interfaces.empty()) {
+        for (auto& iface : module.manifest.interfaces) {
+            UnresolvedSymbol us;
+            us.name = iface.symbol;
+            us.source_file = module.source_name;
+            us.source_line = 0;
+            us.expected_source = iface.provider;
+            // 根据 provider 类型推断 dep_type
+            us.dep_type = DependencyType::MODULE;  // 默认 sca 模块
+            unresolved.push_back(us);
+        }
+        return unresolved;
+    }
+    
+    // ===== 回退: v0.2 正则猜测（无 manifest 时） =====
     std::set<std::string> defined_symbols;
     std::set<std::string> called_symbols;
     
     // 1. 收集所有已定义的符号
     for (const auto& block : module.blocks) {
         if (block.lang_type == CodeLanguage::ZCC) {
-            // 查找函数定义
             std::regex func_def(R"((?:function|函数|func)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\()");
             std::sregex_iterator it(block.code.begin(), block.code.end(), func_def);
             std::sregex_iterator end;
+            for (; it != end; ++it) defined_symbols.insert((*it)[1]);
             
-            for (; it != end; ++it) {
-                defined_symbols.insert((*it)[1]);
-            }
-            
-            // 查找变量定义
             std::regex var_def(R"((?:auto|定义)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=)");
             it = std::sregex_iterator(block.code.begin(), block.code.end(), var_def);
-            for (; it != end; ++it) {
-                defined_symbols.insert((*it)[1]);
-            }
+            for (; it != end; ++it) defined_symbols.insert((*it)[1]);
         }
     }
     
     // 2. 收集所有被调用的符号
     for (const auto& block : module.blocks) {
         if (block.lang_type == CodeLanguage::ZCC) {
-            // 查找函数调用
             std::regex func_call(R"(\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\()");
             std::sregex_iterator it(block.code.begin(), block.code.end(), func_call);
             std::sregex_iterator end;
-            
             for (; it != end; ++it) {
                 std::string name = (*it)[1];
-                // 跳过关键词
                 if (name == "function" || name == "函数" || name == "func" ||
                     name == "auto" || name == "定义" || name == "if" || name == "如果" ||
                     name == "for" || name == "循环" || name == "while" || name == "当") {
@@ -254,13 +393,13 @@ std::vector<UnresolvedSymbol> SmartSCALoader::find_unresolved_symbols(const SCAM
         }
     }
     
-    // 3. 找出未解析的符号（虚空接口）
+    // 3. 差集 → 虚空接口
     for (const auto& symbol : called_symbols) {
         if (defined_symbols.find(symbol) == defined_symbols.end()) {
             UnresolvedSymbol us;
             us.name = symbol;
             us.source_file = module.source_name;
-            us.source_line = 0;  // 需要更精确的位置追踪
+            us.source_line = 0;
             us.dep_type = DependencyType::MODULE;
             unresolved.push_back(us);
         }
@@ -276,6 +415,25 @@ LoadResult SmartSCALoader::load(const std::filesystem::path& path,
     try {
         // 解析.sca 文件
         auto sca_module = parse_sca_file(path);
+        
+        // ===== SCA v0.3: Manifest 模式验证 =====
+        if (sca_module.manifest.has_manifest) {
+            bool hasZCC = false, hasIR = false;
+            for (auto& block : sca_module.blocks) {
+                if (block.lang_type == CodeLanguage::ZCC) hasZCC = true;
+                if (block.lang_type == CodeLanguage::IR)   hasIR = true;
+            }
+            
+            if (!hasZCC && !hasIR) {
+                result.warnings.push_back("SCA v0.3: 模块无有效代码块 (需要 [zcc] 或 [ir])");
+            }
+            
+            // 验证 modes 声明
+            if (sca_module.manifest.modes.empty()) {
+                result.warnings.push_back("SCA v0.3: 未声明 module.modes, 默认 compile");
+            }
+        }
+        
         module_ = std::make_shared<SCAModule>(std::move(sca_module));
         
         // 处理所有代码块
@@ -287,25 +445,36 @@ LoadResult SmartSCALoader::load(const std::filesystem::path& path,
                 case CodeLanguage::IR:
                     process_ir_block(block, result);
                     break;
-                case CodeLanguage::C:
-                case CodeLanguage::CPP:
-                case CodeLanguage::ASM:
-                    process_native_block(block, result);
-                    break;
                 default:
-                    result.warnings.push_back("未知语言块：" + block.language);
+                    // v0.3: C/CPP/ASM 已在 parse_sca_file 中过滤
+                    result.warnings.push_back("跳过不支持的语言块：" + block.language);
             }
         }
         
-        // 关键步骤：扫描"虚空接口"
+        // 虚空接口: v0.3 用 manifest interfaces, 否则回退正则
         if (options.resolve_virtual) {
             result.unresolved_symbols = find_unresolved_symbols(*module_);
         }
         
-        // 设置元数据
+        // 设置元数据 — 优先使用 manifest 信息
+        if (module_->manifest.has_manifest && !module_->manifest.name.empty()) {
+            module_->metadata->name = module_->manifest.name;
+            module_->metadata->version = module_->manifest.version;
+        }
         module_->metadata->source_path = path.string();
         module_->metadata->type = ModuleType::INSTRUCTION_SET;
-        module_->metadata->name = path.stem().string();
+        
+        // Manifest 依赖 → metadata.dependencies
+        if (module_->manifest.has_manifest) {
+            for (auto& dep : module_->manifest.dependencies) {
+                ModuleDependency md;
+                md.name = dep.name;
+                md.version_constraint = dep.version;
+                md.type = (dep.type == "executable") ? DependencyType::EXECUTABLE 
+                                                       : DependencyType::MODULE;
+                module_->metadata->dependencies.push_back(md);
+            }
+        }
         
         // 创建模块对象
         auto mod = std::make_unique<Module>(path, ModuleType::INSTRUCTION_SET);
@@ -335,14 +504,41 @@ ModuleMetadata SmartSCALoader::get_metadata(const std::filesystem::path& path) {
         std::string content((std::istreambuf_iterator<char>(file)),
                            std::istreambuf_iterator<char>());
         
-        // 提取版本信息（如果有）
+        // ===== SCA v0.3: 从 manifest 提取 =====
+        auto manifest = parse_manifest(content);
+        if (manifest.has_manifest) {
+            if (!manifest.name.empty())     metadata.name = manifest.name;
+            if (!manifest.version.empty())  metadata.version = manifest.version;
+            
+            // 填充 modes 到 attributes
+            std::string modesStr;
+            for (size_t i = 0; i < manifest.modes.size(); ++i) {
+                if (i > 0) modesStr += ",";
+                modesStr += manifest.modes[i];
+            }
+            metadata.attributes["sca_version"] = manifest.sca_version;
+            metadata.attributes["modes"] = modesStr;
+            
+            // Manifest 依赖 → metadata.dependencies
+            for (auto& dep : manifest.dependencies) {
+                ModuleDependency md;
+                md.name = dep.name;
+                md.version_constraint = dep.version;
+                md.type = (dep.type == "executable") ? DependencyType::EXECUTABLE 
+                                                       : DependencyType::MODULE;
+                metadata.dependencies.push_back(md);
+            }
+            
+            return metadata;
+        }
+        
+        // ===== 回退: v0.2 正则提取 =====
         std::regex version_pattern(R"(@version\s+(\S+))");
         std::smatch match;
         if (std::regex_search(content, match, version_pattern)) {
             metadata.version = match[1];
         }
         
-        // 提取描述（如果有）
         std::regex desc_pattern(R"(@description\s+(.+))");
         if (std::regex_search(content, match, desc_pattern)) {
             metadata.description = match[1];
@@ -417,12 +613,39 @@ std::vector<ModuleDependency> SmartSCALoader::analyze_dependencies(
     
     std::vector<ModuleDependency> deps;
     
+    // ===== SCA v0.3: 优先使用 manifest 声明的依赖 =====
     std::ifstream file(path);
     if (file) {
         std::string content((std::istreambuf_iterator<char>(file)),
                            std::istreambuf_iterator<char>());
+        file.close();
         
-        // 查找 import 语句
+        // 尝试解析 manifest
+        auto manifest = parse_manifest(content);
+        if (manifest.has_manifest) {
+            for (auto& dep : manifest.dependencies) {
+                ModuleDependency md;
+                md.name = dep.name;
+                md.version_constraint = dep.version;
+                md.type = (dep.type == "executable") ? DependencyType::EXECUTABLE 
+                                                       : DependencyType::MODULE;
+                // sca 类型: 构造默认路径
+                if (dep.type == "sca" || dep.type.empty()) {
+                    md.path = path.parent_path() / (dep.name + ".sca");
+                }
+                md.is_optional = false;
+                deps.push_back(md);
+            }
+            return deps;
+        }
+    }
+    
+    // ===== 回退: v0.2 正则提取 import 语句 =====
+    std::ifstream file2(path);
+    if (file2) {
+        std::string content((std::istreambuf_iterator<char>(file2)),
+                           std::istreambuf_iterator<char>());
+        
         std::regex import_pattern(R"(import\s+["']([^"']+)["'])");
         std::sregex_iterator it(content.begin(), content.end(), import_pattern);
         std::sregex_iterator end;
@@ -430,7 +653,6 @@ std::vector<ModuleDependency> SmartSCALoader::analyze_dependencies(
         for (; it != end; ++it) {
             std::string import_path = (*it)[1];
             
-            // 解析路径
             std::filesystem::path full_path;
             if (std::filesystem::path(import_path).is_absolute()) {
                 full_path = import_path;
@@ -442,7 +664,6 @@ std::vector<ModuleDependency> SmartSCALoader::analyze_dependencies(
             dep.name = full_path.stem().string();
             dep.path = full_path;
             dep.type = DependencyType::MODULE;
-            
             deps.push_back(dep);
         }
     }
@@ -460,7 +681,6 @@ ValidationResult SmartSCALoader::validate(const std::filesystem::path& path) {
         return result;
     }
     
-    // 2. 文件格式检查
     std::ifstream file(path);
     if (!file) {
         result.errors.push_back("无法打开文件");
@@ -468,11 +688,11 @@ ValidationResult SmartSCALoader::validate(const std::filesystem::path& path) {
         return result;
     }
     
-    // 3. 基本语法检查
     std::string content((std::istreambuf_iterator<char>(file)),
                        std::istreambuf_iterator<char>());
+    file.close();
     
-    // 检查括号匹配
+    // 2. 基本括号匹配检查
     int paren_count = 0, brace_count = 0, bracket_count = 0;
     for (char c : content) {
         if (c == '(') paren_count++;
@@ -483,29 +703,87 @@ ValidationResult SmartSCALoader::validate(const std::filesystem::path& path) {
         else if (c == ']') bracket_count--;
     }
     
-    if (paren_count != 0) {
-        result.errors.push_back("括号不匹配：缺少 ')'");
-        result.is_valid = false;
-    }
-    if (brace_count != 0) {
-        result.errors.push_back("大括号不匹配：缺少 '}'");
-        result.is_valid = false;
-    }
-    if (bracket_count != 0) {
-        result.errors.push_back("方括号不匹配：缺少 ']'");
-        result.is_valid = false;
-    }
+    if (paren_count != 0)  { result.errors.push_back("括号不匹配：缺少 ')'");    result.is_valid = false; }
+    if (brace_count != 0)  { result.errors.push_back("大括号不匹配：缺少 '}'");  result.is_valid = false; }
+    if (bracket_count != 0){ result.errors.push_back("方括号不匹配：缺少 ']'");  result.is_valid = false; }
     
-    // 4. 检查是否有有效的 [语言] 块（如果有魔法头）
-    if (content.size() >= 4 && content.substr(0, 4) == "ZCCS") {
-        std::regex block_pattern(R"(\s*\[\s*\w+\s*\])");
-        if (!std::regex_search(content.substr(4), block_pattern)) {
-            result.warnings.push_back("文件包含魔法头但没有有效的语言块");
+    // ===== SCA v0.3: Manifest 验证 =====
+    auto manifest = parse_manifest(content);
+    if (manifest.has_manifest) {
+        if (manifest.name.empty()) {
+            result.errors.push_back("SCA v0.3: manifest 缺少 module.name");
+            result.is_valid = false;
+        }
+        if (manifest.version.empty() || manifest.version == "0.0.0") {
+            result.warnings.push_back("SCA v0.3: 建议声明 module.version");
+        }
+        if (manifest.modes.empty()) {
+            result.warnings.push_back("SCA v0.3: 未声明 module.modes (默认 compile)");
+        }
+        
+        // 检查版本约束字段完整性
+        for (auto& dep : manifest.dependencies) {
+            if (dep.name.empty()) {
+                result.warnings.push_back("SCA v0.3: dependency 缺少 name");
+            }
+        }
+        for (auto& iface : manifest.interfaces) {
+            if (iface.symbol.empty() || iface.provider.empty()) {
+                result.warnings.push_back("SCA v0.3: interface 缺少 symbol 或 provider");
+            }
+        }
+        
+        // 检查是否有被禁止的代码块
+        std::regex forbidden_blocks(R"(\[(c|cpp|c\+\+|asm|assembly)\])");
+        if (std::regex_search(content, forbidden_blocks)) {
+            result.errors.push_back("SCA v0.3: 不允许 [c]/[cpp]/[asm] 代码块 (铁律)");
+            result.is_valid = false;
+        }
+        
+        // ===== SCA v0.3: 版本约束检查 =====
+        for (auto& dep : manifest.dependencies) {
+            if (dep.version.empty()) {
+                result.warnings.push_back("SCA v0.3: dependency '" + dep.name + "' 未声明版本约束");
+                continue;
+            }
+            if (dep.type == "sca" || dep.type.empty()) {
+                auto depPath = path.parent_path() / (dep.name + ".sca");
+                if (std::filesystem::exists(depPath)) {
+                    SmartSCALoader depLoader;
+                    auto depMeta = depLoader.get_metadata(depPath);
+                    if (!depMeta.version.empty() && depMeta.version != "0.0.0") {
+                        if (!checkVersionConstraint(dep.version, depMeta.version)) {
+                            result.errors.push_back(
+                                "SCA v0.3: 版本不匹配 — '" + dep.name + "' 要求 " + dep.version +
+                                ", 实际 " + depMeta.version);
+                            result.is_valid = false;
+                        } else {
+                            result.info.push_back("版本检查通过: " + dep.name + " " + dep.version);
+                        }
+                    } else {
+                        result.warnings.push_back(
+                            "SCA v0.3: 依赖 '" + dep.name + "' 未声明 module.version, 忽略版本约束");
+                    }
+                } else {
+                    result.warnings.push_back(
+                        "SCA v0.3: 依赖 '" + dep.name + "' 未找到 .sca 文件");
+                }
+            }
         }
     }
     
+    // 3. 检查是否有有效的 [语言] 块
+    bool has_zcc_or_ir = false;
+    std::regex block_pattern(R"(\[(zcc|ir)\])");
+    if (std::regex_search(content, block_pattern)) has_zcc_or_ir = true;
+    
+    if (!has_zcc_or_ir && content.size() >= 4 && content.substr(0, 4) == "ZCCS") {
+        result.warnings.push_back("文件包含 ZCCS 魔术头但没有有效的 [zcc] 或 [ir] 块");
+    }
+    
     if (result.is_valid) {
-        result.info.push_back("验证通过");
+        result.info.push_back("验证通过" + 
+            (manifest.has_manifest ? " (SCA v" + manifest.sca_version + ")" : ""));
     }
     
     return result;
@@ -580,15 +858,22 @@ std::vector<LoadResult> LoaderRegistry::load_with_dependencies(
             LoadResult error_result;
             error_result.success = false;
             error_result.errors.push_back("不支持的格式：" + current_path.string());
-            all_results.push_back(error_result);
+            all_results.push_back(std::move(error_result));
             continue;
         }
         
         auto result = loader->load(current_path, options);
-        all_results.push_back(result);
+        bool loadSuccess = result.success;
+        all_results.push_back(std::move(result));
         loaded_paths.insert(current_path);
         
-        if (result.success) {
+        if (loadSuccess) {
+            // ===== SCA v0.3: 版本约束检查 =====
+            if (result.module && result.module->metadata) {
+                // 检查已加载的依赖是否满足版本约束
+                // (由 load_with_dependencies 的父模块检查, 暂存警告)
+            }
+            
             // 分析依赖，加入队列
             auto deps = loader->analyze_dependencies(current_path);
             for (const auto& dep : deps) {

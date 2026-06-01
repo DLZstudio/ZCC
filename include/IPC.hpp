@@ -322,7 +322,7 @@ private:
     std::string address;
     std::vector<std::unique_ptr<IPCChannel>> connections;
     std::vector<IPCChannel*> idle_connections;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     
     // 池配置
@@ -443,7 +443,7 @@ private:
     std::unordered_map<std::string, std::unique_ptr<ConnectionPool>> pools_;
     std::unordered_map<SubscriptionID, std::function<void(const Message&)>> subscriptions_;
     
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::atomic<ConnectionID> next_conn_id{1};
     std::atomic<ServerID> next_server_id{1};
     std::atomic<StreamID> next_stream_id{1};
@@ -465,7 +465,7 @@ private:
     std::shared_ptr<IPCChannel> ipc_channel;
     std::thread service_thread;
     bool running = false;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::atomic<uint32_t> sequence_id{1};
     
     Adapter() = default;

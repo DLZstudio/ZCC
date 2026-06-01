@@ -482,7 +482,7 @@ void ConnectionPool::cleanup_thread() {
 
 // ==================== IPCManager 实现 ====================
 
-IPCManager::ConnectionID IPCManager::connect(const std::string& address, const ConnectOptions& options) {
+ConnectionID IPCManager::connect(const std::string& address, const ConnectOptions& options) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     ConnectionID id = next_conn_id++;
@@ -533,7 +533,7 @@ std::future<ConnectionID> IPCManager::connect_async(
     return promise->get_future();
 }
 
-IPCManager::ServerID IPCManager::listen(const std::string& address, const ServerOptions& options) {
+ServerID IPCManager::listen(const std::string& address, const ServerOptions& options) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     ServerID id = next_server_id++;
@@ -624,7 +624,7 @@ std::vector<std::future<Message>> IPCManager::batch_send(
     return futures;
 }
 
-IPCManager::StreamID IPCManager::open_stream(ConnectionID conn, const StreamOptions& options) {
+StreamID IPCManager::open_stream(ConnectionID conn, const StreamOptions& options) {
     StreamID id = next_stream_id++;
     // 简化实现：实际应该创建流对象
     return id;
@@ -645,7 +645,7 @@ void IPCManager::close_stream(StreamID stream) {
     // 简化实现
 }
 
-IPCManager::SubscriptionID IPCManager::subscribe(
+SubscriptionID IPCManager::subscribe(
     ConnectionID conn,
     const std::string& topic,
     std::function<void(const Message&)> callback) {
