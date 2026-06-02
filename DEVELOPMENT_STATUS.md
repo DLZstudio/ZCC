@@ -53,7 +53,8 @@ e:\114514\语言\ZCC\
 ✅ IR 数据流 (P0)                100%
 ✅ SCA v0.3 Manifest 解析器     100%  ← 刚完成
 ✅ 版本约束检查 (SemVer)        100%  ← 刚完成
-✅ IR Interpreter 框架 (CFG)     100%  ← 刚完成: execute→executeBlock→BlockResult
+✅ IR Interpreter 框架 (CFG)     100%  ← execute→executeBlock→BlockResult
+✅ 堆内存管理 (ALLOC/FREE)       100%  ← 句柄表 + 边界检查 + OOM
 ⚠️ IR Interpreter opcode        95%   ← 63/66 已实现 (BigNum Karatsuba + 全类别)
 ❌ 优化器 (8 Pass)              25%   ← 2/8 有实质逻辑
 ⚠️ JIT (LLVM)                    桩   ← P2 接口桩完成 (JITBackend.hpp)
