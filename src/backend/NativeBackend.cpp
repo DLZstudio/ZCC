@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <sstream>
 #include <vector>
+#include <new>
 
 namespace zcc {
 
@@ -474,53 +475,78 @@ RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstructi
             auto it = reg_.find(valPtr->getID());
             if (it == reg_.end()) return RuntimeValue();
             
-            // 如果是堆句柄 → 从 allocTable 读取偏移0处的 int64_t
             RuntimeValue& rv = it->second;
+            // 堆句柄解引用: LOAD handle [, offset] → 从 buffer 读 int64_t
             if (rv.isNumber()) {
                 int64_t h = static_cast<int64_t>(rv.asNumber());
                 auto at = allocTable_.find(h);
-                if (at != allocTable_.end() && at->second.size() >= 8) {
+                if (at != allocTable_.end()) {
+                    size_t off = (instr.getNumOperands() >= 2) 
+                        ? static_cast<size_t>(op1().asNumber()) : 0;
+                    if (off + 8 > at->second.size()) {
+                        std::cerr << "ZCC: LOAD out of bounds (handle=" << h 
+                                  << " offset=" << off << " size=" << at->second.size() << ")\n";
+                        return RuntimeValue();
+                    }
                     int64_t v = 0;
-                    memcpy(&v, at->second.data(), 8);
+                    memcpy(&v, at->second.data() + off, 8);
                     return RuntimeValue(v);
                 }
             }
             return rv;
         }
         case ZCCIROpcode::STORE: {
-            auto v = op1();
             auto& operand = instr.getOperand(0);
             auto valPtr = operand.getValue();
-            if (!valPtr) return v;
+            if (!valPtr) return op1();
             
             auto it = reg_.find(valPtr->getID());
-            if (it != reg_.end()) {
-                RuntimeValue& rv = it->second;
-                // 如果目标变量存的是一个堆句柄 → 写入 buffer
-                if (rv.isNumber()) {
-                    int64_t h = static_cast<int64_t>(rv.asNumber());
-                    auto at = allocTable_.find(h);
-                    if (at != allocTable_.end() && at->second.size() >= 8) {
-                        int64_t w = static_cast<int64_t>(v.asNumber());
-                        memcpy(at->second.data(), &w, 8);
-                        return v;
+            // 堆句柄写入: STORE handle, offset, value (3 operands)
+            if (it != reg_.end() && it->second.isNumber() && instr.getNumOperands() >= 3) {
+                int64_t h = static_cast<int64_t>(it->second.asNumber());
+                auto at = allocTable_.find(h);
+                if (at != allocTable_.end()) {
+                    size_t off = static_cast<size_t>(op1().asNumber());
+                    auto val = (instr.getNumOperands() >= 3) ? op2() : op1();
+                    if (off + 8 > at->second.size()) {
+                        std::cerr << "ZCC: STORE out of bounds (handle=" << h
+                                  << " offset=" << off << " size=" << at->second.size() << ")\n";
+                        return RuntimeValue();
                     }
+                    int64_t w = static_cast<int64_t>(val.asNumber());
+                    memcpy(at->second.data() + off, &w, 8);
+                    return val;
                 }
             }
-            reg_[valPtr->getID()] = v;
-            return v;
+            // 普通变量写入: STORE var, value (2 operands)
+            if (it != reg_.end()) {
+                it->second = op1();
+                return it->second;
+            }
+            reg_[valPtr->getID()] = op1();
+            return op1();
         }
         case ZCCIROpcode::ALLOCA:
         case ZCCIROpcode::ALLOC: {
             size_t sz = static_cast<size_t>(op0().asNumber());
-            if (sz == 0) sz = 8;  // 最小 8 字节
+            if (sz == 0) sz = 8;
             int64_t handle = nextHandle_++;
-            allocTable_[handle] = std::vector<uint8_t>(sz, 0);
+            try {
+                allocTable_[handle] = std::vector<uint8_t>(sz, 0);
+            } catch (const std::bad_alloc&) {
+                std::cerr << "ZCC: ALLOC failed, out of memory (size=" << sz << ")\n";
+                return RuntimeValue(int64_t(-1));  // 哨兵句柄 = 分配失败
+            }
             return RuntimeValue(handle);
         }
         case ZCCIROpcode::FREE: {
             int64_t h = static_cast<int64_t>(op0().asNumber());
-            allocTable_.erase(h);
+            auto it = allocTable_.find(h);
+            if (it == allocTable_.end()) {
+                std::cerr << "ZCC: FREE invalid handle " << h << "\n";
+                return RuntimeValue();
+            }
+            allocTable_.erase(it);
             return RuntimeValue();
         }
             
