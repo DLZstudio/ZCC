@@ -277,24 +277,12 @@ class NativeBackend : public Backend {
 public:
     NativeBackend() = default;
     
-    bool initialize() override { return true; }
-    
-    CompileResult compile(const ZCCIRModule& module,
-                         const CompileOptions& options) override;
-    
-    std::string getName() const override { return "native"; }
-    bool isSupported() const override { return true; }
-    std::string getFileExtension() const override { return ".exe"; }
-    std::string getDescription() const override { return "Native Executable with Embedded Interpreter"; }
-    
-    // 运行 IR 模块
-    static RuntimeValue runModule(const ZCCIRModule& module);
-    
-    // 保存 IR 文件
-    bool saveIRFile(const ZCCIRModule& module, const std::string& path);
-    
+    // 解释执行 (测试可访问)
+#ifdef ZCC_TEST_ACCESS
+public:
+#else
 private:
-    // 解释执行
+#endif
     class Interpreter {
     public:
         Interpreter(InterpreterState& state) : state_(state) {}
@@ -314,14 +302,36 @@ private:
         RuntimeValue resolveOperand(const ZCCIRInstruction& instr, size_t idx);
         RuntimeValue constantToRuntime(const ZCCIRConstant::ConstantValue& cv);
         
+    // 测试可访问 (仅当 ZCC_TEST_ACCESS 定义时)
+    #ifdef ZCC_TEST_ACCESS
+    public:
+        std::unordered_map<uint32_t, RuntimeValue>& testReg() { return reg_; }
+        std::unordered_map<int64_t, std::vector<uint8_t>>& testAllocTable() { return allocTable_; }
+    #endif
+
     private:
         InterpreterState& state_;
-        std::unordered_map<uint32_t, RuntimeValue> reg_;     // 指令结果寄存器
-        std::unordered_map<int64_t, std::vector<uint8_t>> allocTable_; // 堆句柄表
+        std::unordered_map<uint32_t, RuntimeValue> reg_;
+        std::unordered_map<int64_t, std::vector<uint8_t>> allocTable_;
         int64_t nextHandle_ = 1;
     };
     
-    // 生成自包含的可执行文件（包含解释器和字节码）
+public:  // 恢复 public 访问级别 (被 Interpreter 的条件 private: 影响)
+    bool initialize() override { return true; }
+    
+    CompileResult compile(const ZCCIRModule& module,
+                         const CompileOptions& options) override;
+    
+    std::string getName() const override { return "native"; }
+    bool isSupported() const override { return true; }
+    std::string getFileExtension() const override { return ".exe"; }
+    std::string getDescription() const override { return "Native Executable with Embedded Interpreter"; }
+    
+    static RuntimeValue runModule(const ZCCIRModule& module);
+    
+    bool saveIRFile(const ZCCIRModule& module, const std::string& path);
+    
+private:
     std::vector<uint8_t> generateExecutable(const ZCCIRModule& module,
                                            const CompileOptions& options);
 };

@@ -535,7 +535,13 @@ RuntimeValue NativeBackend::Interpreter::executeInstruction(const ZCCIRInstructi
                 allocTable_[handle] = std::vector<uint8_t>(sz, 0);
             } catch (const std::bad_alloc&) {
                 std::cerr << "ZCC: ALLOC failed, out of memory (size=" << sz << ")\n";
-                return RuntimeValue(int64_t(-1));  // 哨兵句柄 = 分配失败
+                return RuntimeValue(int64_t(-1));
+            } catch (const std::length_error&) {
+                std::cerr << "ZCC: ALLOC failed, size too large (size=" << sz << ")\n";
+                return RuntimeValue(int64_t(-1));
+            } catch (...) {
+                std::cerr << "ZCC: ALLOC failed (size=" << sz << ")\n";
+                return RuntimeValue(int64_t(-1));
             }
             return RuntimeValue(handle);
         }
