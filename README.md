@@ -407,4 +407,4 @@ chmod +x build.sh && ./build.sh
 
 ## License
 
-工作室内部开发项目。
+本项目以 [MIT License](LICENSE) 授权发布。
